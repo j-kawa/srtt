@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}{{ server.code }} train {{ params["train_number"] }}{% endblock %}
+
+{% block description %}{{ server.code }} train {{ params["train_number"] }} details {% endblock %}
+
+{% block body %}
+<table>
+  <tr>
+    <th>no.</th>
+    <td>{{ params["train_number"] }}</td>
+  </tr>
+  <tr>
+    <th>route part</th>
+    <td>{{ params["route_part"] }}</td>
+  </tr>
+  <tr>
+    <th>route kind</th>
+    <td>{{ params["kind"] }}</td>
+  </tr>
+  <tr>
+    <th>train type</th>
+    <td>{{ params["type"] }}</td>
+  </tr>
+  <tr>
+    <th>train length</th>
+    <td>{{ params["length"] }}&nbsp;m</td>
+  </tr>
+  <tr>
+    <th>train weight</th>
+    <td>{{ params["weight"] }}&nbsp;t</td>
+  </tr>
+</table>
+<div>
+  <a href="{{ params['prev'] }}.html">&larr;{{ params['prev'] }}</a>
+  <a href="{{ params['next'] }}.html">{{ params['next'] }}&rarr;</a>
+</div>
+<table>
+  <tr>
+    <th class="inactive">ord</th>
+    <th>km/h</th>
+    <th>point name</th>
+    <th>arr.</th>
+    <th>dep.</th>
+    <th>line</th>
+    <th>ST</th>
+    <th>PT</th>
+    <th>EDR</th>
+  </tr>
+  {% for row in path -%}
+  <tr class="{{ 'active' if row['is_active'] else 'inactive'}} sel">
+    <td class="tnum inactive">{{ loop.index }}</td>
+    <td class="tnum">{{ row["speed_limit"]}}</td>
+    <td>{{ row["name"] }}</td>
+    <td>{{ row["entry_time"] }}</td>
+    <td>{{ row["exit_time"] }}</td>
+    <td>{{ row["line"] }}</td>
+    <td>{{ row["stop_type"] }}</td>
+    <td>{{ row["platform"] }} {{ row["track"]}}</td>
+    <td>{% if row["prefix"] %}
+      <a href="http://panel.simrail.eu:8092/?stationId={{ row['point_id'] }}&serverCode={{ server.code }}">{{
+        row["prefix"]
+      }}</a>
+    {% endif %}</td>
+  </tr>
+  {% endfor -%}
+</table>
+{% endblock %}

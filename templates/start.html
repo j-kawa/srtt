@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{{ server.code }} start times{% endblock %}
+
+{% block description %}{{ server.code }} trains sorted by the start time{% endblock %}
+
+{% block body %}
+<table>
+  <tr>
+    <th class="inactive">ord</th>
+    <th>start time</th>
+    <th>no.</th>
+    <th>route kind</th>
+    <th>scenario start</th>
+    <th>scenario end</th>
+    <th>duration</th>
+    <th>train type</th>
+    <th>max speed</th>
+    <th>train length</th>
+    <th>train weight</th>
+  </tr>
+  {% for row in data -%}
+  <tr class="sel">
+    <td class="tnum inactive">{{ loop.index }}</td>
+    <td class="tnum">{{ row["start_time"] }}</td>
+    <td><a href="train/{{ row['no'] }}.html">{{ row["no"] }}</a></td>
+    <td>{{ row["route_kind"] }}</td>
+    <td>{{ row["start_point"] }}</td>
+    <td>{{ row["end_point"] }}</td>
+    <td class="tnum">{{ row["duration"] }}</td>
+    <td>{{ row["train_type"] }}</td>
+    <td class="tnum">{{ row["max_speed"] }}&nbsp;km/h</td>
+    <td class="tnum">{{ row["train_length"] }}&nbsp;m</td>
+    <td class="tnum">{{ row["train_weight"] }}&nbsp;t</td>
+  </tr>
+  {% endfor -%}
+</table>
+{% endblock %}

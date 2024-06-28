@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>SRTT {% block title required %}{% endblock %}</title>
+    <script defer>const tz = {{
+       "undefined" if server is none else server.tz
+    }};</script>
+    <script defer src="/{{ g.resources['script.js'] }}"></script>
+    <link rel="stylesheet" href="/{{ g.resources['style.css'] }}">
+  </head>
+  <body>
+    <div class="header container">
+      <div class="left"><a href="/">SRTT</a> {% block description required %}
+      {% endblock %}</div>
+      <div class="center"><span id="clock">--:--:--</span></div>
+      <div class="right">Last sync:
+        <span id="last_sync" onmouseenter="update_last_sync(this)">{{
+          g.sync_ts
+        }}</span>
+      </div>
+    </div>
+    <div class="content">
+     {%- block body required %}{% endblock -%}
+    </div>
+  </body>
+</html>

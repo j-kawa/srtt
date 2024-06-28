@@ -1,0 +1,61 @@
+body {
+    background-color: white;
+    font-family: monospace;
+    margin: 0;
+}
+.content {
+    margin: 0 8px;
+}
+
+th, td {
+    border: 1px solid black;
+    padding: .25em .5em;
+}
+.sel:hover {
+    background-color: lavender;
+}
+table {
+    border: 1px solid black;
+    border-collapse: collapse;
+    margin: 1em .5em;
+}
+
+.header {
+    background-color: lavender;
+    border-bottom: 1px solid gray;
+    position: sticky;
+    top: 0;
+}
+
+.container {
+    display: flex;
+}
+.left {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin: .5em;
+}
+.center {
+    margin: .5em;
+}
+.right {
+    flex-grow: 1;
+    flex-basis: 0;
+    text-align: right;
+    margin: .5em;
+}
+
+.tnum {
+    text-align: right;
+}
+.active {
+    color: black;
+}
+.inactive {
+    color: gray;
+}
+
+#clock {
+    border: 1px solid black;
+    padding: 1px 4px;
+}
