@@ -7,6 +7,23 @@ class Meta(BaseModel):
     sync_ts: int
 
 
+def sanitize(obj):
+    # it's bad, but the quality of data is worse
+    if isinstance(obj, str):
+        return " ".join(obj.split())
+    if isinstance(obj, list):
+        for idx, item in enumerate(obj):
+            obj[idx] = sanitize(item)
+        return obj
+    if isinstance(obj, BaseModel):
+        for name in obj.__fields__:
+            setattr(obj, name, sanitize(getattr(obj, name)))
+        return obj
+    if isinstance(obj, (int, float, type(None))):
+        return obj
+    raise NotImplementedError(type(obj))
+
+
 class RawRoutePoint(BaseModel):
     stationCategory: Optional[Literal["A", "B", "C", "D", "E"]]
     trainType: str = Field(pattern=r"[A-Z]{3}")
@@ -26,14 +43,14 @@ class RawRoutePoint(BaseModel):
     departureTime: Optional[str] = Field(
         pattern=r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"
     )
-    platform: Optional[str] = Field(pattern=r"[IVX]+")
+    platform: Optional[str] = Field(pattern=r"[IVX]*")
     line: int
 
 
 class RawRoute(BaseModel):
     trainWeight: int
     trainLength: int
-    locoType: str
+    locoType: Optional[str]
     trainName: str
     startStation: str
     endStation: str

@@ -1,3 +1,6 @@
+from more_itertools import all_equal
+
+
 PREFIX_WILDCHAR = "x"
 
 
@@ -8,18 +11,6 @@ def prefix_matches(prefix: str, string: str) -> bool:
         if pc == PREFIX_WILDCHAR:
             continue
         if pc != sc:
-            return False
-    return True
-
-
-def all_equal(it) -> bool:
-    it = iter(it)
-    try:
-        first = next(it)
-    except StopIteration:
-        return True
-    for val in it:
-        if val != first:
             return False
     return True
 

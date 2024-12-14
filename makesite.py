@@ -14,7 +14,7 @@ from display import (
     format_ts,
 )
 from external.fetch import load
-from external.models import Meta, RawRoutes, RawServers
+from external.models import Meta, RawRoutes, RawServers, sanitize
 from point import PointDetails, StopType, get_points
 from prefix import get_prefixes
 from resources import RESOURCES_VERSIONED, get_resource_path, get_resources
@@ -51,15 +51,15 @@ class RouteDisc:
     def from_route(cls, route: Route) -> "RouteDisc":
         points = route.get_scenario_points()
         return cls(
-            train_name=route.route_kind,
+            train_name=route.get_route_kind_short(),
             point_ids=tuple(point.point_id for point in points),
             route_part=route.route_part,
             other=(
                 len(route.train_no),
                 tuple((
-                    point.point_id,
-                    point.kind,
-                    point.line,
+                    # disable, for now (probably forever)
+                    # point.kind,
+                    # point.line,
                     point.stop_type == StopType.PH,
                 ) for point in points),
             )
@@ -102,7 +102,7 @@ def gen_tt_by_start(
             route.end().get_exit_datetime()
             - route.start().get_entry_datetime()
         ),
-        "train_type": route.train_type,
+        "train_type": route.get_train_type(),
         "max_speed": max(
             (point.max_speed for point in route.get_scenario_points()),
             default=0
@@ -152,7 +152,9 @@ def gen_tt_by_route(
             for r
             in groups[disc]
         ), fmt=format_timedelta),
-        "types": sorted({TRAIN_TYPES[r.train_type] for r in groups[disc]}),
+        "types": sorted(
+            {TRAIN_TYPES[r.get_train_type()] for r in groups[disc]}
+        ),
         "max_speed": Range.from_minmax(
             max(p.max_speed for p in r.get_scenario_points())
             for r
@@ -202,7 +204,7 @@ def gen_train(
         "train_number": route.train_no,
         "route_part": route.route_part or "",
         "kind": route.route_kind,
-        "type": route.train_type,
+        "type": route.get_train_type(),
         "length": route.train_length,
         "weight": route.train_weight,
         "prev": prev_no,
@@ -294,6 +296,7 @@ def make_site(
     for server in servers:
         path = os.path.join(cfg.src, "servers", f"{server.code}.json")
         tt = load(path, RawRoutes)
+        tt = sanitize(tt)
         server_files = make_server(cfg.dst, server, tt, root_ctx)
         files.update(server_files)
 

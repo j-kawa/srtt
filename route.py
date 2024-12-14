@@ -2,11 +2,15 @@ import dataclasses
 from datetime import datetime, time
 from enum import Enum
 from itertools import count, groupby
+import re
 from typing import Optional
 
 from external.models import RawRoute, RawRoutes
 from point import PointDetails, StopType
 from utils import parse_ts
+
+
+NAME_REGEX = re.compile(r'(?P<kind>.+) - ".+"')
 
 
 class RoutePointStatus(Enum):
@@ -43,6 +47,7 @@ class RoutePoint:
 
 @dataclasses.dataclass
 class Route:
+
     # logical parameters
     train_no: str
     route_part: Optional[int]
@@ -50,7 +55,7 @@ class Route:
     route_points: list[RoutePoint]
 
     # physical parameters
-    train_type: str
+    train_type: Optional[str]
     train_length: int
     train_weight: int
 
@@ -80,6 +85,14 @@ class Route:
             in self.route_points
             if point.status == RoutePointStatus.PLAYABLE
         ]
+
+    def get_route_kind_short(self) -> str:
+        if match_ := NAME_REGEX.fullmatch(self.route_kind):
+            return match_.groupdict()["kind"]
+        return self.route_kind
+
+    def get_train_type(self) -> str:
+        return self.train_type or "?"
 
 
 def make_route(
@@ -130,7 +143,10 @@ def get_routes(
         for ingame, point_ids in parts_iter:
             if not ingame:
                 continue
-            parts.append(set(point_ids))
+            point_ids = set(point_ids)
+            if len(point_ids) == 1:  # remove when testing things
+                continue
+            parts.append(point_ids)
         route_part_iter = count(1)
         route_part = None
         for part in parts:
