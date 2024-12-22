@@ -9,12 +9,14 @@
   <tr>
     <th class="inactive">ord</th>
     <th>no.</th>
+    {% if has_parts %}
     <th>route part</th>
-    <th>route kind</th>
+    {% endif -%}
+    <th>train type</th>
     <th>scenario start</th>
     <th>scenario end</th>
     <th>duration</th>
-    <th>train type(s)</th>
+    <th>main unit</th>
     <th>max speed</th>
     <th>train length</th>
     <th>train weight</th>
@@ -24,20 +26,22 @@
   <tr class="sel">
     <td class="tnum inactive">{{ loop.index }}</td>
     <td>{{ row["prefixes"]|join("<br>"|safe) }}</td>
+    {% if has_parts %}
     <td>{{ row["part"] }}</td>
-    <td>{{ row["kind"] }}</td>
+    {% endif -%}
+    <td>{{ row["train_type"] }}</td>
     <td>{{ row["start"] }}</td>
     <td>{{ row["end"] }}</td>
     <td class="tnum">{{ row["duration"] }}</td>
-    <td>{{ row["types"]|join(",<br>"|safe) }}</td>
+    <td>{{ inacc(row["inaccurate"], row["main_units"]|join(", ")) }}</td>
     <td class="tnum">{{ row["max_speed"] }}&nbsp;km/h</td>
-    <td class="tnum">{{ row["train_length"] }}&nbsp;m</td>
-    <td class="tnum">{{ row["train_weight"] }}&nbsp;t</td>
+    <td class="tnum">{{ inacc(row["inaccurate"], row["train_length"], "m") }}</td>
+    <td class="tnum">{{ inacc(row["inaccurate"], row["train_weight"], "t") }}</td>
     <td>
       {% for route in row["routes"] -%}
       <a href="train/{{ route['number'] }}.html">{{
         route["start_time"].strftime("%H:%M")
-        }}</a>
+      }}</a>
       {% endfor -%}
     </td>
   </tr>

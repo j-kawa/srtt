@@ -1,27 +1,13 @@
-from typing import Literal, Optional
+from typing import Generic, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, Field, RootModel, TypeAdapter
+from pydantic import BaseModel, Field, RootModel
+
+
+T = TypeVar("T")
 
 
 class Meta(BaseModel):
     sync_ts: int
-
-
-def sanitize(obj):
-    # it's bad, but the quality of data is worse
-    if isinstance(obj, str):
-        return " ".join(obj.split())
-    if isinstance(obj, list):
-        for idx, item in enumerate(obj):
-            obj[idx] = sanitize(item)
-        return obj
-    if isinstance(obj, BaseModel):
-        for name in obj.__fields__:
-            setattr(obj, name, sanitize(getattr(obj, name)))
-        return obj
-    if isinstance(obj, (int, float, type(None))):
-        return obj
-    raise NotImplementedError(type(obj))
 
 
 class RawRoutePoint(BaseModel):
@@ -63,8 +49,15 @@ class RawRoute(BaseModel):
     timetable: list[RawRoutePoint]
 
 
-class RawRoutes(RootModel):
+class RawRoutes(RootModel[list[RawRoute]]):
     root: list[RawRoute]
+
+
+class RawResponse(BaseModel, Generic[T]):
+    result: bool
+    data: T
+    count: int
+    description: str
 
 
 class RawServer(BaseModel):
@@ -75,18 +68,29 @@ class RawServer(BaseModel):
     id: str
 
 
-class RawServers(RootModel):
+class RawServers(RootModel[list[RawServer]]):
     root: list[RawServer]
 
 
-class RawServersResponse(BaseModel):
-    result: bool
-    data: RawServers
-    count: int
-    description: str
+RawServersResponse = RawResponse[RawServers]
 
 
-def load(path: str, type_: type):
-    with open(path, "rb") as f:
-        data = f.read()
-    return TypeAdapter(type_).validate_json(data)
+class TrainData(BaseModel):
+    VDDelayedTimetableIndex: int
+    InBorderStationArea: bool
+
+
+class RawTrain(BaseModel):
+    TrainNoLocal: str
+    Vehicles: list[str]
+    TrainData: TrainData
+    RunId: str
+    id: str
+    Type: Literal["user", "bot"]
+
+
+class RawTrains(RootModel[list[RawTrain]]):
+    root: list[RawTrain]
+
+
+RawTrainsResponse = RawResponse[RawTrains]

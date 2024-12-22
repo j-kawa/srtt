@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}about{% endblock %}
+
+{% block description %}about{% endblock %}
+
+{% block body %}
+<h2>About</h2>
+<div>
+  code repository: <a href="https://github.com/j-kawa/srtt">GitHub</a>
+</div>
+<h2>Version history</h2>
+<ul class="spaced-sublists">
+  <li>
+    0.2 (2024-12-20)
+    <ul>
+      <li>aligned with new game content</li>
+      <li>added actual train compositions</li>
+      <li>fixed train weights and lengths</li>
+    </ul>
+  </li>
+  <li>
+    0.1 (2023-07-19)
+    <ul>
+      <li>initial release</li>
+    </ul>
+  </li>
+</ul>
+{% endblock %}

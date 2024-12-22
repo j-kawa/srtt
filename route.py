@@ -1,8 +1,8 @@
 import dataclasses
+import re
 from datetime import datetime, time
 from enum import Enum
 from itertools import count, groupby
-import re
 from typing import Optional
 
 from external.models import RawRoute, RawRoutes
@@ -51,11 +51,11 @@ class Route:
     # logical parameters
     train_no: str
     route_part: Optional[int]
-    route_kind: str
+    train_name: str
     route_points: list[RoutePoint]
 
     # physical parameters
-    train_type: Optional[str]
+    main_unit: Optional[str]
     train_length: int
     train_weight: int
 
@@ -75,7 +75,7 @@ class Route:
             if p.status == RoutePointStatus.PLAYABLE
         )
 
-    def get_start_time(self) -> datetime:
+    def get_start_time(self) -> time:
         return self.start().get_entry_time()
 
     def get_scenario_points(self) -> list[RoutePoint]:
@@ -86,13 +86,13 @@ class Route:
             if point.status == RoutePointStatus.PLAYABLE
         ]
 
-    def get_route_kind_short(self) -> str:
-        if match_ := NAME_REGEX.fullmatch(self.route_kind):
-            return match_.groupdict()["kind"]
-        return self.route_kind
-
     def get_train_type(self) -> str:
-        return self.train_type or "?"
+        return ", ".join(sorted({
+            p.kind
+            for p
+            in self.route_points
+            if p.status == RoutePointStatus.PLAYABLE
+        }))
 
 
 def make_route(
@@ -104,8 +104,8 @@ def make_route(
     return Route(
         train_no=raw_route.trainNoLocal,
         route_part=route_part,
-        route_kind=raw_route.trainName,
-        train_type=raw_route.locoType,
+        train_name=raw_route.trainName,
+        main_unit=raw_route.locoType,
         train_length=raw_route.trainLength,
         train_weight=raw_route.trainWeight,
         route_points=[RoutePoint(
@@ -140,10 +140,10 @@ def get_routes(
             (route.pointId for route in raw_route.timetable),
             key=lambda point_id: points[point_id].ingame
         )
-        for ingame, point_ids in parts_iter:
+        for ingame, point_ids_iter in parts_iter:
             if not ingame:
                 continue
-            point_ids = set(point_ids)
+            point_ids = set(point_ids_iter)
             if len(point_ids) == 1:  # remove when testing things
                 continue
             parts.append(point_ids)

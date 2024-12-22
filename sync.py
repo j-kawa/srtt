@@ -1,11 +1,10 @@
 import json
 import os
-import time
 from typing import Any, Optional
 
-from external.fetch import get_routes, get_servers, get_timezone
+from external.client import ApiClient
 from external.models import Meta
-from utils import pick_codes
+from utils import pick_codes, time_secs
 
 
 class Saver:
@@ -28,20 +27,20 @@ class Saver:
             json.dump(obj, f, indent=2, ensure_ascii=False)
 
 
-def sync(dst: str, only_code: Optional[str]):
+def sync(api: ApiClient, dst: str, only_code: Optional[str]):
     saver = Saver(dst)
 
-    meta = Meta(sync_ts=time.time_ns() // 10**9)
+    meta = Meta(sync_ts=time_secs())
     saver.save_json(["meta.json"], meta.model_dump())
 
-    servers = get_servers()
+    servers = api.get_servers()
     saver.save_json(["servers.json"], servers.model_dump())
 
     all_codes = [server.ServerCode for server in servers.root]
     codes = pick_codes(only_code, all_codes)
 
     for code in codes:
-        routes = get_routes(code)
+        routes = api.get_routes(code)
         saver.save_json(["servers", f"{code}.json"], routes.model_dump())
-        timezone = get_timezone(code)
+        timezone = api.get_timezone(code)
         saver.save_json(["timezones", f"{code}.json"], timezone)

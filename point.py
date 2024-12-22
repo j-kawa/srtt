@@ -47,7 +47,7 @@ class PointDetails:
     stop_types: set[StopType]
     ingame: bool
     prefix: Optional[str]
-    station_category: str
+    station_category: Optional[str]
 
     @classmethod
     def from_raw(cls, raw: RawRoutePoint):

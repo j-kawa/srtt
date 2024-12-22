@@ -10,31 +10,63 @@
     <th>no.</th>
     <td>{{ params["train_number"] }}</td>
   </tr>
+  {%- if params["route_part"] %}
   <tr>
     <th>route part</th>
     <td>{{ params["route_part"] }}</td>
   </tr>
-  <tr>
-    <th>route kind</th>
-    <td>{{ params["kind"] }}</td>
-  </tr>
+  {% endif -%}
   <tr>
     <th>train type</th>
-    <td>{{ params["type"] }}</td>
+    <td>{{ params["train_type"] }}</td>
+  </tr>
+  <tr>
+    <th>train name</th>
+    <td>{{ params["train_name"] }}</td>
+  </tr>
+  <tr>
+    <th>main unit</th>
+    <td>{{ inacc(params["inaccurate"], params["main_units"]|join(", ")) }}</td>
   </tr>
   <tr>
     <th>train length</th>
-    <td>{{ params["length"] }}&nbsp;m</td>
+    <td>{{ inacc(params["inaccurate"], params["length"], "m") }}</td>
   </tr>
   <tr>
     <th>train weight</th>
-    <td>{{ params["weight"] }}&nbsp;t</td>
+    <td>{{ inacc(params["inaccurate"], params["weight"], "t") }}</td>
   </tr>
 </table>
 <div>
   <a href="{{ params['prev'] }}.html">&larr;{{ params['prev'] }}</a>
   <a href="{{ params['next'] }}.html">{{ params['next'] }}&rarr;</a>
 </div>
+<table>
+  <tr>
+    <th class="inactive">ord</th>
+    <th>first seen</th>
+    <th>last seen</th>
+    <th>length</th>
+    <th>weight</th>
+    <th>composition</th>
+  </tr>
+  {% if not trainsets -%}
+  <tr>
+    <td colspan="6" class="inactive tcenter">no train history</td>
+  </tr>
+  {% else -%}
+  {%- for trainset in trainsets -%}
+  <tr class="sel">
+    <td class="tnum inactive">{{ loop.index }}</td>
+    <td>{{ trainset["first_seen"] }}</td>
+    <td>{{ trainset["last_seen"] }}</td>
+    <td class="tnum">{{ trainset.length }} m</td>
+    <td class="tnum">{{ trainset.weight }} t</td>
+    <td>{{ composition(trainset.vehicle_counts.items()) }}</td>
+  </tr>
+  {% endfor -%}
+  {% endif -%}
+</table>
 <table>
   <tr>
     <th class="inactive">ord</th>

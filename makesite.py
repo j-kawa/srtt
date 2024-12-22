@@ -1,24 +1,33 @@
 import dataclasses
 import os
 import shutil
-from typing import Any, Hashable, Optional
+from collections import Counter
+from itertools import chain
+from typing import Any, Hashable, Iterable, Optional
 
 import jinja2
+from more_itertools import minmax
 
-from consts import TRAIN_TYPES
+from consts import MAIN_UNITS
+from db import Database
+from db.expr import All, Asc, Desc, Eq, Field, Gte, Value
+from db.models import Train, deserialize_composition
 from display import (
     Range,
     format_route_no,
     format_stop_type,
     format_timedelta,
-    format_ts,
+    format_ts_iso_minutes,
+    format_ts_rfc_7231,
 )
-from external.fetch import load
-from external.models import Meta, RawRoutes, RawServers, sanitize
+from external.client import load_file
+from external.models import Meta, RawRoutes, RawServers
 from point import PointDetails, StopType, get_points
 from prefix import get_prefixes
 from resources import RESOURCES_VERSIONED, get_resource_path, get_resources
 from route import Route, RoutePointStatus, get_routes
+from utils import time_secs
+from vehicles import parse_vehicle
 
 
 env = jinja2.Environment(
@@ -28,21 +37,22 @@ env = jinja2.Environment(
 )
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class RootCtx:
     sync_ts: str
     resources: dict[str, str]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class GenConfig:
+    db: Database
     src: str
     dst: str
 
 
 @dataclasses.dataclass(frozen=True)
 class RouteDisc:
-    train_name: str
+    train_type: str
     point_ids: tuple[int, ...]
     route_part: Optional[int]
     other: Hashable  # opaque identifier data
@@ -51,7 +61,7 @@ class RouteDisc:
     def from_route(cls, route: Route) -> "RouteDisc":
         points = route.get_scenario_points()
         return cls(
-            train_name=route.get_route_kind_short(),
+            train_type=route.get_train_type(),
             point_ids=tuple(point.point_id for point in points),
             route_part=route.route_part,
             other=(
@@ -66,11 +76,93 @@ class RouteDisc:
         )
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class Server:
     code: str
     name: str
     tz: int
+
+
+@dataclasses.dataclass
+class TrainSet:
+    main_unit: str
+    vehicle_counts: Counter[str]
+    length: int
+    weight: int
+    first_seen: int
+    last_seen: int
+
+
+def get_trainsets(db: Database, code: str, since: int, only: set[str]):
+    ret = {}
+    with db.transaction() as tx:
+        ids_trains = tx.select(
+            model=Train,
+            where=All(
+                Eq(Field("server"), Value(code)),
+                Gte(Field("last_seen"), Value(since)),
+            ),
+            order=[Asc("train_number"), Desc("last_seen")],
+        )
+    for _, train in ids_trains:
+        if train.train_number not in only:
+            continue
+        vehicles = [
+            parse_vehicle(ident)
+            for ident
+            in deserialize_composition(train.composition)
+        ]
+        ret.setdefault(train.train_number, []).append(TrainSet(
+            main_unit=vehicles[0].name,
+            vehicle_counts=Counter(v.name for v in vehicles),
+            length=round(sum(vehicle.length for vehicle in vehicles)),
+            weight=round(sum(vehicle.weight for vehicle in vehicles)),
+            first_seen=format_ts_iso_minutes(train.first_seen_server),
+            last_seen=format_ts_iso_minutes(train.last_seen_server),
+        ))
+    return ret
+
+
+@dataclasses.dataclass
+class TrainSetStats:
+    main_units: list[str]
+    length: Range[int]
+    weight: Range[int]
+    accurate: bool
+
+
+def get_trainset_stats(
+        trainsets: dict[str, list[TrainSet]],
+        routes: Iterable[Route],
+) -> TrainSetStats:
+    accurate = True
+    main_units = set()
+    lengths = weights = ()
+
+    for route in routes:
+        route_trainsets = trainsets.get(route.train_no, [])
+        if not route_trainsets:
+            main_units.add(MAIN_UNITS[route.main_unit or "?"])
+            lengths = minmax([route.train_length, *lengths])
+            weights = minmax([route.train_weight, *weights])
+            accurate = False
+            continue
+        main_units.update(ts.main_unit for ts in route_trainsets)
+        lengths = minmax(chain(
+            (ts.length for ts in route_trainsets),
+            lengths,
+        ))
+        weights = minmax(chain(
+            (ts.weight for ts in route_trainsets),
+            weights,
+        ))
+
+    return TrainSetStats(
+        main_units=sorted(main_units),
+        length=Range(*lengths),
+        weight=Range(*weights),
+        accurate=accurate,
+    )
 
 
 def gen(
@@ -92,26 +184,37 @@ def gen_tt_by_start(
         name: str,
         points: dict[str, PointDetails],
         routes: list[Route],
+        trainsets: dict[str, list[TrainSet]],
         root_ctx: RootCtx,
 ):
-    data = [{
-        "no": format_route_no(route),
-        "route_kind": route.route_kind,
-        "start_time": route.get_start_time().strftime("%H:%M"),
-        "duration": format_timedelta(
-            route.end().get_exit_datetime()
-            - route.start().get_entry_datetime()
-        ),
-        "train_type": route.get_train_type(),
-        "max_speed": max(
-            (point.max_speed for point in route.get_scenario_points()),
-            default=0
-        ),
-        "train_length": route.train_length,
-        "train_weight": route.train_weight,
-        "start_point": points[route.start().point_id].get_human_name(),
-        "end_point": points[route.end().point_id].get_human_name(),
-    } for route in sorted(routes, key=Route.get_start_time)]
+    data = []
+    for route in sorted(routes, key=Route.get_start_time):
+        trainset_stats = get_trainset_stats(trainsets, [route])
+        data.append({
+            "no": format_route_no(route),
+            "train_type": route.get_train_type(),
+            "train_name": route.train_name,
+            "start_time": route.get_start_time().strftime("%H:%M"),
+            "duration": format_timedelta(
+                route.end().get_exit_datetime()
+                - route.start().get_entry_datetime()
+            ),
+            "main_units": trainset_stats.main_units,
+            "max_speed": max(
+                (point.max_speed for point in route.get_scenario_points()),
+                default=0
+            ),
+            "train_length": trainset_stats.length,
+            "train_weight": trainset_stats.weight,
+            "start_point": points[route.start().point_id].get_human_name(),
+            "end_point": points[route.end().point_id].get_human_name(),
+            "inaccurate": not trainset_stats.accurate,
+            "compositions": {
+                tuple(ts.vehicle_counts.items())
+                for ts
+                in trainsets.get(route.train_no, [])
+            },
+        })
 
     gen("start.html", destdir, name, root_ctx, {
         "data": data,
@@ -125,6 +228,7 @@ def gen_tt_by_route(
         name: str,
         points: dict[str, PointDetails],
         routes: list[Route],
+        trainsets: dict[str, list[TrainSet]],
         root_ctx: RootCtx,
 ) -> dict[str, tuple[str, str]]:
     all_numbers = {r.train_no for r in routes}
@@ -141,41 +245,41 @@ def gen_tt_by_route(
             get_prefixes(numbers, all_numbers - numbers)
         ))
 
-    data = [{
-        "prefixes": prefixes,
-        "part": str(disc.route_part or ""),
-        "kind": disc.train_name,
-        "start": points[disc.point_ids[0]].get_human_name(),
-        "end": points[disc.point_ids[-1]].get_human_name(),
-        "duration": Range.from_minmax((
-            r.end().get_exit_datetime() - r.start().get_entry_datetime()
-            for r
-            in groups[disc]
-        ), fmt=format_timedelta),
-        "types": sorted(
-            {TRAIN_TYPES[r.get_train_type()] for r in groups[disc]}
-        ),
-        "max_speed": Range.from_minmax(
-            max(p.max_speed for p in r.get_scenario_points())
-            for r
-            in groups[disc]
-        ),
-        "train_length": Range.from_minmax(
-            r.train_length for r in groups[disc]
-        ),
-        "train_weight": Range.from_minmax(
-            r.train_weight for r in groups[disc]
-        ),
-        "routes": [{
-            "start_time": route.get_start_time(),
-            "number": format_route_no(route),
-        } for route in sorted(groups[disc], key=Route.get_start_time)],
-    } for disc, prefixes in sorted(prefixes.items(), key=lambda pair: (
-        len(pair[1][0]),
-        pair[1]
-    ))]
+    data = []
+    for disc, prefixes in sorted(prefixes.items(), key=lambda pair: (
+            len(pair[1][0]),
+            pair[1]
+    )):
+        group = groups[disc]
+        trainset_stats = get_trainset_stats(trainsets, group)
+        data.append({
+            "prefixes": prefixes,
+            "part": str(disc.route_part or ""),
+            "train_type": disc.train_type,
+            "start": points[disc.point_ids[0]].get_human_name(),
+            "end": points[disc.point_ids[-1]].get_human_name(),
+            "duration": Range.from_minmax(iterable=(
+                r.end().get_exit_datetime() - r.start().get_entry_datetime()
+                for r
+                in group
+            ), fmt=format_timedelta),
+            "main_units": trainset_stats.main_units,
+            "max_speed": Range.from_minmax(
+                max(p.max_speed for p in r.get_scenario_points())
+                for r
+                in group
+            ),
+            "train_length": trainset_stats.length,
+            "train_weight": trainset_stats.weight,
+            "inaccurate": not trainset_stats.accurate,
+            "routes": [{
+                "start_time": route.get_start_time(),
+                "number": format_route_no(route),
+            } for route in sorted(group, key=Route.get_start_time)]
+        })
 
     gen("route.html", destdir, name, root_ctx, {
+        "has_parts": any(disc.route_part for disc in groups),
         "data": data,
         "server": server,
     })
@@ -197,16 +301,21 @@ def gen_train(
         points: dict[str, PointDetails],
         route: Route,
         adj: tuple[str, str],
+        trainsets: dict[str, list[TrainSet]],
         root_ctx: RootCtx,
 ):
+    trainset_stats = get_trainset_stats(trainsets, [route])
+
     prev_no, next_no = adj
     params = {
         "train_number": route.train_no,
         "route_part": route.route_part or "",
-        "kind": route.route_kind,
-        "type": route.get_train_type(),
-        "length": route.train_length,
-        "weight": route.train_weight,
+        "train_name": route.train_name,
+        "train_type": route.get_train_type(),
+        "main_units": trainset_stats.main_units,
+        "length": trainset_stats.length,
+        "weight": trainset_stats.weight,
+        "inaccurate": not trainset_stats.accurate,
         "prev": prev_no,
         "next": next_no,
     }
@@ -231,6 +340,7 @@ def gen_train(
     gen("train.html", destdir, name, root_ctx, {
         "path": path,
         "params": params,
+        "trainsets": trainsets.get(route.train_no, []),
         "server": server,
     })
 
@@ -239,6 +349,7 @@ def make_server(
         destdir: str,
         server: Server,
         routes: RawRoutes,
+        trainsets: dict[str, list[TrainSet]],
         root_ctx: RootCtx,
 ) -> set[str]:
     files = set()
@@ -246,11 +357,19 @@ def make_server(
     routes = get_routes(routes, points)
 
     name = f"{server.code}/tt-by-start.html"
-    gen_tt_by_start(server, destdir, name, points, routes, root_ctx)
+    gen_tt_by_start(server, destdir, name, points, routes, trainsets, root_ctx)
     files.add(name)
 
     name = f"{server.code}/tt-by-route.html"
-    adj = gen_tt_by_route(server, destdir, name, points, routes, root_ctx)
+    adj = gen_tt_by_route(
+        server,
+        destdir,
+        name,
+        points,
+        routes,
+        trainsets,
+        root_ctx
+    )
     files.add(name)
 
     for route in routes:
@@ -262,6 +381,7 @@ def make_server(
             points,
             route,
             adj[format_route_no(route)],
+            trainsets,
             root_ctx,
         )
         files.add(name)
@@ -293,11 +413,16 @@ def make_site(
     })
     files.add("index.html")
 
+    gen("about.html", cfg.dst, "about.html", root_ctx, {"server": None})
+    files.add("about.html")
+
+    week_ago = time_secs() - (7 * 24 * 3600)
     for server in servers:
         path = os.path.join(cfg.src, "servers", f"{server.code}.json")
-        tt = load(path, RawRoutes)
-        tt = sanitize(tt)
-        server_files = make_server(cfg.dst, server, tt, root_ctx)
+        tt = load_file(path, RawRoutes)
+        train_numbers = {route.trainNoLocal for route in tt.root}
+        trainsets = get_trainsets(cfg.db, server.code, week_ago, train_numbers)
+        server_files = make_server(cfg.dst, server, tt, trainsets, root_ctx)
         files.update(server_files)
 
     return files
@@ -314,24 +439,24 @@ def cleanup_files(directory: str, keep: set[str]):
             os.unlink(path)
 
 
-def make(src: str, dst: str, only_code: Optional[str]):
-    cfg = GenConfig(src, dst)
+def make(db: Database, src: str, dst: str, only_code: Optional[str]):
+    cfg = GenConfig(db, src, dst)
 
-    sync_ts = load(os.path.join(cfg.src, "meta.json"), Meta).sync_ts
+    sync_ts = load_file(os.path.join(cfg.src, "meta.json"), Meta).sync_ts
     resources = get_resources(RESOURCES_VERSIONED)
 
     root_ctx = RootCtx(
-        sync_ts=format_ts(sync_ts),
+        sync_ts=format_ts_rfc_7231(sync_ts),
         resources=resources,
     )
 
-    servers = load(os.path.join(cfg.src, "servers.json"), RawServers)
+    servers = load_file(os.path.join(cfg.src, "servers.json"), RawServers)
 
     servers = [
         Server(
             code=server.ServerCode,
             name=server.ServerName,
-            tz=load(os.path.join(
+            tz=load_file(os.path.join(
                 cfg.src,
                 "timezones",
                 f"{server.ServerCode}.json"

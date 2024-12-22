@@ -25,6 +25,7 @@ table {
     border-bottom: 1px solid gray;
     position: sticky;
     top: 0;
+    z-index: 2;
 }
 
 .container {
@@ -45,6 +46,9 @@ table {
     margin: .5em;
 }
 
+.tcenter {
+    text-align: center;
+}
 .tnum {
     text-align: right;
 }
@@ -54,8 +58,32 @@ table {
 .inactive {
     color: gray;
 }
+.inaccurate {
+    position: relative;
+    text-decoration: underline dotted;
+}
+.inaccurate::before {
+    content: "*"
+}
+.inaccurate:hover::after {
+    content: "value inaccurate/ unconfirmed";
+    text-wrap: nowrap;
+    position: absolute;
+    left: 2em;
+    top: 2em;
+    border: 1px gray solid;
+    background-color: lightyellow;
+    padding: 0.25em;
+    color: black;
+    text-align: initial;
+    z-index: 1;
+}
 
 #clock {
     border: 1px solid black;
     padding: 1px 4px;
+}
+
+.spaced-sublists > li > ul {
+    margin-bottom: 1em;
 }

@@ -47,5 +47,10 @@ def format_stop_type(st: StopType) -> str:
     }[st]
 
 
-def format_ts(ts: int) -> str:
+def format_ts_rfc_7231(ts: int) -> str:
     return datetime.utcfromtimestamp(ts).strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+
+def format_ts_iso_minutes(ts: int) -> str:
+    # "iso8601" without the T time indicator
+    return datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M")

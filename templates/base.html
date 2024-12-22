@@ -1,3 +1,15 @@
+{% macro inacc(inacc, value, unit=None) -%}
+<span{% if inacc %} class="inaccurate"{% endif %}>{{
+  value
+}}{% if unit %}&nbsp;{{ unit }}{% endif %}</span>
+{%- endmacro -%}
+
+{% macro composition(vehicles) -%}
+{% for name, count in vehicles -%}
+{{ count }}&middot;{{ name }}{% if not loop.last %} {% endif %}
+{%- endfor %}
+{%- endmacro -%}
+
 <!DOCTYPE html>
 <html lang="en">
   <head>

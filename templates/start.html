@@ -10,28 +10,40 @@
     <th class="inactive">ord</th>
     <th>start time</th>
     <th>no.</th>
-    <th>route kind</th>
+    <th>train type</th>
+    <th>train name</th>
     <th>scenario start</th>
     <th>scenario end</th>
     <th>duration</th>
-    <th>train type</th>
+    <th>main unit</th>
     <th>max speed</th>
     <th>train length</th>
     <th>train weight</th>
+    <th>composition</th>
   </tr>
   {% for row in data -%}
   <tr class="sel">
     <td class="tnum inactive">{{ loop.index }}</td>
     <td class="tnum">{{ row["start_time"] }}</td>
     <td><a href="train/{{ row['no'] }}.html">{{ row["no"] }}</a></td>
-    <td>{{ row["route_kind"] }}</td>
+    <td>{{ row["train_type"] }}</td>
+    <td>{{ row["train_name"] }}</td>
     <td>{{ row["start_point"] }}</td>
     <td>{{ row["end_point"] }}</td>
     <td class="tnum">{{ row["duration"] }}</td>
-    <td>{{ row["train_type"] }}</td>
+    <td>{{ inacc(row["inaccurate"], row["main_units"]|join(", ")) }}</td>
     <td class="tnum">{{ row["max_speed"] }}&nbsp;km/h</td>
-    <td class="tnum">{{ row["train_length"] }}&nbsp;m</td>
-    <td class="tnum">{{ row["train_weight"] }}&nbsp;t</td>
+    <td class="tnum">{{ inacc(row["inaccurate"], row["train_length"], "m") }}</td>
+    <td class="tnum">{{ inacc(row["inaccurate"], row["train_weight"], "t") }}</td>
+    <td>
+      {%- if row["compositions"] | length > 1 -%}
+      <em>variable</em>
+      {%- elif row["compositions"] | length == 0 -%}
+      <em>unknown</em>
+      {%- else -%}
+      {{ composition(*row["compositions"]) }}
+      {%- endif -%}
+    </td>
   </tr>
   {% endfor -%}
 </table>
