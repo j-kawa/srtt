@@ -37,5 +37,5 @@ For usage details, please invoke `python srtt.py -h` for help.
 
 ## Requirements
 
-* Python 3.9,
+* Python 3.11,
 * a web server -- if one wishes to host it.
