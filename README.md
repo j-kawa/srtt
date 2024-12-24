@@ -16,9 +16,9 @@ The project is functionally split into three parts:
 
    * https://panel.simrail.eu:8084/servers-open -- available servers,
    * https://api1.aws.simrail.eu:8082/api/getAllTimetables -- timetables,
-   * https://api1.aws.simrail.eu:8082/api/getTimeZone -- timezones.
+   * https://api1.aws.simrail.eu:8082/api/getTime -- servers' times.
 
-   Then, raw output is saved to disk.
+   Then, raw (except time) output is saved to disk.
 
 2) The running trains scanning part -- timetables acquired in the
    first part lack the correct information about actual trains'

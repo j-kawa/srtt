@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from external.client import ApiClient
 from external.models import Meta
-from utils import pick_codes, time_secs
+from utils import pick_codes, time_millis, time_secs
 
 
 class Saver:
@@ -42,5 +42,8 @@ def sync(api: ApiClient, dst: str, only_code: Optional[str]):
     for code in codes:
         routes = api.get_routes(code)
         saver.save_json(["servers", f"{code}.json"], routes.model_dump())
-        timezone = api.get_timezone(code)
-        saver.save_json(["timezones", f"{code}.json"], timezone)
+
+        server_time = api.get_time(code)
+        world_time = time_millis()
+        time_offset = server_time - world_time
+        saver.save_json(["time_offsets", f"{code}.json"], time_offset)

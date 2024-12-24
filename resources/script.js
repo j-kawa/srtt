@@ -1,15 +1,12 @@
 "use strict";
 
 function tick_clock() {
-    var now = new Date();
-    const dt = 1000 - now.getMilliseconds();
+    var now = BigInt(new Date()) + time_offset;
 
-    now.setHours(now.getHours() + tz);
-    const time = now.toISOString().substring(11, 19);
+    const time = new Date(Number(now)).toISOString().substring(11, 19);
+    document.getElementById("clock").textContent = time;
 
-    document.getElementById("clock").innerHTML = time;
-
-    setTimeout(tick_clock, dt);
+    setTimeout(tick_clock, Number(1000n - now % 1000n));
 }
 
 function update_last_sync(elem) {
@@ -36,7 +33,7 @@ function update_last_sync(elem) {
 
     last_sync.style.textDecoration = "underline dotted";
 
-    if (tz !== undefined) {
+    if (time_offset !== undefined) {
         tick_clock();
     }
 })();

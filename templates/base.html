@@ -10,13 +10,16 @@
 {%- endfor %}
 {%- endmacro -%}
 
+{%- macro bigint(integer) %}{{ integer }}n{% endmacro -%}
+
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <title>SRTT {% block title required %}{% endblock %}</title>
-    <script defer>const tz = {{
-       "undefined" if server is none else server.tz
+    <script defer>const time_offset = {{
+      "undefined" if server is none else bigint(server.time_offset)
     }};</script>
     <script defer src="/{{ g.resources['script.js'] }}"></script>
     <link rel="stylesheet" href="/{{ g.resources['style.css'] }}">

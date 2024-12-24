@@ -93,14 +93,6 @@ class ApiClient:
         )
         return self.get(url, RawRoutes)
 
-    def get_timezone(self, code: str) -> int:
-        url = make_url(
-            "api1.aws.simrail.eu:8082",
-            "/api/getTimeZone",
-            {"serverCode": code},
-        )
-        return self.get(url, int)
-
     def get_time(self, code: str) -> int:
         url = make_url(
             "api1.aws.simrail.eu:8082",

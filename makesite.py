@@ -80,7 +80,7 @@ class RouteDisc:
 class Server:
     code: str
     name: str
-    tz: int
+    time_offset: int
 
 
 @dataclasses.dataclass
@@ -456,9 +456,9 @@ def make(db: Database, src: str, dst: str, only_code: Optional[str]):
         Server(
             code=server.ServerCode,
             name=server.ServerName,
-            tz=load_file(os.path.join(
+            time_offset=load_file(os.path.join(
                 cfg.src,
-                "timezones",
+                "time_offsets",
                 f"{server.ServerCode}.json"
             ), int)
         )

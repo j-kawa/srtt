@@ -76,8 +76,8 @@ def scan(db: Database, api: ApiClient, only_code: Optional[str]) -> None:
     codes = pick_codes(only_code, all_codes)
 
     for code in codes:
-        world_time = time_secs()
         server_time = api.get_time(code) // 1_000
+        world_time = time_secs()
         trains = api.get_trains(code)
 
         with db.transaction(exclusive=True) as tx:
