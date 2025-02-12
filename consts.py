@@ -229,6 +229,7 @@ VEHICLES = {
     "4E/EP07-135": {"family": "4E", "name": "EP07"},
     "4E/EP07-174": {"family": "4E", "name": "EP07"},
     "4E/EP08-001": {"family": "4E", "name": "EP08"},
+    "4E/EP08-008": {"family": "4E", "name": "EP08"},
     "4E/EP08-013": {"family": "4E", "name": "EP08"},
     "Traxx/E186-134": {"family": "E186", "name": "Traxx"},
     "Traxx/E186-929": {"family": "E186", "name": "Traxx"},
