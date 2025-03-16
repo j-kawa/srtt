@@ -14,8 +14,9 @@ class Vehicle:
 
 IDENT_REGEX = re.compile(
     r"(?P<model>[-\w/ ]+)"
-    r"(:(?P<brake>[GP]?))?"
-    r"(:(?P<cargo_weight>\d*)(@(?P<cargo>[-\w]*))?)?"
+    r"(:(?P<brake>[A-Z][A-Z\d]*?))?"
+    r"(:(?P<cargo_weight>\d*))?"
+    r"(@(?P<cargo>[-\w]*))?"
 )
 
 
