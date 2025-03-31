@@ -5,10 +5,11 @@ COMPOSITION_SEP = ","
 
 
 def serialize_composition(vehicles: list[str]) -> str:
-    offenders = {vehicle for vehicle in vehicles if COMPOSITION_SEP in vehicle}
-    if offenders:
-        raise ValueError(f"separator in vehicle names: {offenders}")
-    return COMPOSITION_SEP.join(vehicles)
+    return COMPOSITION_SEP.join(
+        vehicle.replace(COMPOSITION_SEP, "")
+        for vehicle
+        in vehicles
+    )
 
 
 def deserialize_composition(composition: str) -> list[str]:

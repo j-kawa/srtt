@@ -21,10 +21,11 @@ IDENT_REGEX = re.compile(
 
 
 def parse_ident(ident: str) -> tuple[str, int]:
+    ident = ident.strip()
     if match_ := IDENT_REGEX.fullmatch(ident):
         groups = match_.groupdict()
         return groups["model"], int(groups["cargo_weight"] or "0")
-    raise ValueError(f"unrecognized format: {ident}")
+    raise ValueError(f"unrecognized format: {repr(ident)}")
 
 
 def parse_vehicle(ident: str) -> Vehicle:
