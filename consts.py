@@ -259,6 +259,7 @@ VEHICLES = {
     "EN57/EN57-206": {"family": "EN57", "name": "EN57"},
     "EN57/EN57-612": {"family": "EN57", "name": "EN57"},
     "EN57/EN57-650": {"family": "EN57", "name": "EN57"},
+    "EN57/EN57-919": {"family": "EN57", "name": "EN57"},
     "EN57/EN57-1000": {"family": "EN57", "name": "EN57"},
     "EN57/EN57-1003": {"family": "EN57", "name": "EN57"},
     "EN57/EN57-1051": {"family": "EN57", "name": "EN57"},
