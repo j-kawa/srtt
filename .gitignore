@@ -1,2 +1,7 @@
 __pycache__/
 *.pyc
+
+# outputs
+output/
+raw/
+trains.db

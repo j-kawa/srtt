@@ -1,4 +1,4 @@
-INGAME_POINTS = frozenset([
+BASE_MAP_POINTS = frozenset([
     "Baranówka",
     "Będzin",
     "Będzin Ksawera",
@@ -126,6 +126,57 @@ INGAME_POINTS = frozenset([
     "Zawiercie GT",
 ])
 
+LODZ_DLC_POINTS = frozenset([
+    "Bedoń",
+    "Dąbrowice Skierniewickie",
+    "Gałkówek",
+    "Jesionka",
+    "Justynów",
+    "Koluszki Bęzel.R154",
+    "Koluszki PZS R145",
+    "Koluszki PZS R154",
+    "Koluszki R121",
+    "Koluszki R122",
+    "Koluszki R59",
+    "Koluszki",
+    "Krosnowa",
+    "Lipce Reymontowskie",
+    "Łódź Andrzejów",
+    "Łódź Dąbrowa PBS",
+    "Łódź Olechów Łoa",
+    "Łódź Olechów Łoc",
+    "Łódź Olechów Wschód",
+    "Łódź Widzew PZS R3",
+    "Łódź Widzew R9",
+    "Łódź Widzew",
+    "Maków",
+    "Międzyborów",
+    "Płyćwia GT",
+    "Płyćwia",
+    "Przyłęk Duży",
+    "Puszcza Mariańska",
+    "Radziwiłłów Mazowiecki",
+    "Rogów",
+    "Skierniewice GT 201-208",
+    "Skierniewice M PZS",
+    "Skierniewice P PZS",
+    "Skierniewice Rawka",
+    "Skierniewice S PZS",
+    "Skierniewice",
+    "Sucha Żyrardowska",
+    "Wągry",
+    "Żakow. Płd Zieleń R7",
+    "Żakowice Płd Roz.5",
+    "Żakowice Południowe",
+    "Żakowice",
+    "Żyrardów",
+])
+
+INGAME_POINTS = frozenset().union(
+    BASE_MAP_POINTS,
+    LODZ_DLC_POINTS,
+)
+
 MAIN_UNITS = {
     "E186 (Traxx)": "Traxx",
     "E6ACTa (Dragon2)": "Dragon2",
@@ -143,7 +194,7 @@ MAIN_UNITS = {
     "?": "?",
 }
 
-CONTROLLABLE_POINTS = {
+BASE_MAP_CONTROLLABLE_POINTS = {
     "Będzin": "B",
     "Biała Rawska": "BR",
     "Bukowno": "Bo",
@@ -155,6 +206,7 @@ CONTROLLABLE_POINTS = {
     "Góra Włodowska": "GW",
     "Grodzisk Mazowiecki": "Gr",
     "Idzikowice": "Id",
+    "Józefinów": "Jz",
     "Juliusz": "Ju",
     "Katowice": "KO",
     "Katowice Zawodzie": "KZ",
@@ -163,7 +215,7 @@ CONTROLLABLE_POINTS = {
     "Kozłów": "Kz",
     "Kraków Batowice": "BT",
     "Kraków Przedmieście": "KPm",
-    "Łazy": "LB",
+    "Łazy": "ŁB",
     "Łazy Ła": "ŁA",
     "Łazy Łc": "ŁC",
     "Miechów": "Mi",
@@ -185,9 +237,28 @@ CONTROLLABLE_POINTS = {
     "Strzałki": "St",
     "Szeligi": "Se",
     "Tunel": "Tl",
+    "Warszawa Włochy": "Wł",
     "Włoszczowa Północ": "WP",
     "Zastów": "Zs",
     "Zawiercie": "Zw",
+}
+
+LODZ_DLC_CONTROLLABLE_POINTS = {
+    "Gałkówek": "G",
+    "Koluszki": "Kl",
+    "Łódź Andrzejów": "ŁAn",
+    "Łódź Widzew": "ŁW",
+    "Płyćwia": "Pł",
+    "Radziwiłłów Mazowiecki": "RM",
+    "Rogów": "Rg",
+    "Skierniewice": "Sk",
+    "Żakowice Południowe": "ZP",
+    "Żyrardów": "Zr",
+}
+
+CONTROLLABLE_POINTS = {
+    **BASE_MAP_CONTROLLABLE_POINTS,
+    **LODZ_DLC_CONTROLLABLE_POINTS,
 }
 
 VEHICLE_FAMILIES = {
