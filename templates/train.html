@@ -90,7 +90,7 @@
     <td>{{ row["stop_type"] }}</td>
     <td>{{ row["platform"] }} {{ row["track"]}}</td>
     <td>{% if row["prefix"] %}
-      <a href="http://panel.simrail.eu:8092/?stationId={{ row['point_id'] }}&serverCode={{ server.code }}">{{
+      <a href="https://panel.simrail.eu:8093/?stationId={{ row['point_id'] }}&serverCode={{ server.code }}">{{
         row["prefix"]
       }}</a>
     {% endif %}</td>
