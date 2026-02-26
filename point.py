@@ -1,7 +1,7 @@
 import dataclasses
-from enum import Enum
+from enum import IntEnum
 from itertools import chain
-from typing import Optional, TypeVar
+from typing import Optional, Self, TypeVar
 
 from consts import CONTROLLABLE_POINTS, INGAME_POINTS
 from external.models import RawRoutePoint, RawRoutes
@@ -10,7 +10,7 @@ from external.models import RawRoutePoint, RawRoutes
 T = TypeVar("T")
 
 
-class StopType(Enum):
+class StopType(IntEnum):
     BZ = 0
     PH = 1
     PT = 2
@@ -23,11 +23,8 @@ class StopType(Enum):
             "NoncommercialStop": cls.PT,
         }[stop_type]
 
-    def __str__(self):
-        return "--" if self is self.BZ else self.name
-
-    def __repr__(self):
-        return self.name
+    def display(self) -> Optional[str]:
+        return {self.BZ: None, self.PH: "ph", self.PT: "pt"}[self]
 
 
 def merge_optional(v1: T, v2: T) -> T:
@@ -40,7 +37,7 @@ def merge_optional(v1: T, v2: T) -> T:
     return v1
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class PointDetails:
     name: str
     supervisor: Optional[str]
@@ -50,7 +47,7 @@ class PointDetails:
     station_category: Optional[str]
 
     @classmethod
-    def from_raw(cls, raw: RawRoutePoint):
+    def from_raw(cls, raw: RawRoutePoint) -> Self:
         if raw.nameOfPoint != raw.nameForPerson:
             raise ValueError(
                 f"point names differ: `{raw.nameOfPoint}`"
@@ -65,7 +62,7 @@ class PointDetails:
             station_category=raw.stationCategory,
         )
 
-    def merge(self, other: "PointDetails"):
+    def merge(self, other: "PointDetails") -> None:
         assert self.name == other.name
         self.supervisor = merge_optional(self.supervisor, other.supervisor)
         self.station_category = merge_optional(

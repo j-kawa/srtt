@@ -1,3 +1,6 @@
+from typing import TypedDict
+
+
 BASE_MAP_POINTS = frozenset([
     "Baranówka",
     "Będzin",
@@ -259,7 +262,14 @@ CONTROLLABLE_POINTS = {
     **LODZ_DLC_CONTROLLABLE_POINTS,
 }
 
-VEHICLE_FAMILIES = {
+
+class FamilyDetails(TypedDict):
+    length: float
+    weight: float
+    type: str
+
+
+VEHICLE_FAMILIES: dict[str, FamilyDetails] = {
     "4E": {"length": 15.79, "weight": 79.99, "type": "loco"},
     "E186": {"length": 18.66, "weight": 83.78, "type": "loco"},
     "E6ACTa": {"length": 20.56, "weight": 119.92, "type": "loco"},
@@ -289,7 +299,13 @@ VEHICLE_FAMILIES = {
     "110Ac": {"length": 24.46, "weight": 39.88, "type": "passenger-car"},
 }
 
-VEHICLES = {
+
+class VehicleDetails(TypedDict):
+    family: str
+    name: str
+
+
+VEHICLES: dict[str, VehicleDetails] = {
     "4E/EU07-005": {"family": "4E", "name": "EU07"},
     "4E/EU07-068": {"family": "4E", "name": "EU07"},
     "4E/EU07-070": {"family": "4E", "name": "EU07"},

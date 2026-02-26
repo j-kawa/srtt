@@ -11,15 +11,15 @@ class Saver:
 
     def __init__(self, directory: str):
         self.directory = directory
-        self.mkdir_cache = set()
+        self.mkdir_cache = set[str]()
 
-    def _ensure_dir_exists(self, path: str):
+    def _ensure_dir_exists(self, path: str) -> None:
         if path in self.mkdir_cache:
             return
         os.makedirs(path, exist_ok=True)
         self.mkdir_cache.add(path)
 
-    def save_json(self, path_parts: list[str], obj: Any):
+    def save_json(self, path_parts: list[str], obj: Any) -> None:
         path = os.path.join(self.directory, *path_parts)
         self._ensure_dir_exists(os.path.dirname(path))
         print("SAVE", path)
@@ -27,7 +27,7 @@ class Saver:
             json.dump(obj, f, indent=2, ensure_ascii=False)
 
 
-def sync(api: ApiClient, dst: str, only_code: Optional[str]):
+def sync(api: ApiClient, dst: str, only_code: Optional[str]) -> None:
     saver = Saver(dst)
 
     meta = Meta(sync_ts=time_secs())

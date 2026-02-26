@@ -2,7 +2,7 @@ import dataclasses
 import os
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(slots=True, frozen=True)
 class Migration:
     ver: int
     name: str

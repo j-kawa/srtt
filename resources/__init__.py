@@ -29,9 +29,9 @@ def get_resource_target_name(name: str, is_versioned: bool) -> str:
     return f"{root}.{digest}{ext}"
 
 
-def get_resources(rv: dict[str, bool]) -> dict[str, str]:
+def get_resources() -> dict[str, str]:
     return {
         name: get_resource_target_name(name, is_versioned)
         for name, is_versioned
-        in rv.items()
+        in RESOURCES_VERSIONED.items()
     }

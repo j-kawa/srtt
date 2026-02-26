@@ -1,9 +1,10 @@
 import dataclasses
 import os
 import shutil
+import typing as t
 from collections import Counter
+from datetime import datetime, time, timedelta, timezone
 from itertools import chain
-from typing import Any, Hashable, Iterable, Optional
 
 import jinja2
 from more_itertools import minmax
@@ -12,53 +13,132 @@ from consts import MAIN_UNITS
 from db import Database
 from db.expr import All, Asc, Desc, Eq, Field, Gte, Value
 from db.models import Train, deserialize_composition
-from display import (
-    Range,
-    format_route_no,
-    format_stop_type,
-    format_timedelta,
-    format_ts_iso_minutes,
-    format_ts_rfc_7231,
-)
 from external.client import load_file
 from external.models import Meta, RawRoutes, RawServers
 from point import PointDetails, StopType, get_points
 from prefix import get_prefixes
-from resources import RESOURCES_VERSIONED, get_resource_path, get_resources
+from resources import get_resource_path, get_resources
 from route import Route, RoutePointStatus, get_routes
-from utils import time_secs
+from utils import SupportsLt, pick_codes, time_secs
 from vehicles import parse_vehicle
+
+
+if t.TYPE_CHECKING:
+    from _typeshed import DataclassInstance
 
 
 env = jinja2.Environment(
     loader=jinja2.PackageLoader(__name__),
     autoescape=jinja2.select_autoescape(),
     undefined=jinja2.StrictUndefined,
+    lstrip_blocks=True,
+    trim_blocks=True,
+    line_statement_prefix='#',
+    keep_trailing_newline=True,
 )
 
 
-@dataclasses.dataclass
-class RootCtx:
-    sync_ts: str
+F = t.TypeVar("F", bound=t.Callable[..., t.Any])
+
+
+def register_filter(env: jinja2.Environment) -> t.Callable[[F], F]:
+    def inner(func: F) -> F:
+        env.filters[func.__name__] = func
+        return func
+    return inner
+
+
+@register_filter(env)
+def td_minutes(td: timedelta) -> str:
+    secs = td.days * 24 * 3600 + td.seconds
+    return f"{secs // 3600}:{secs // 60 % 60:02}"
+
+
+@register_filter(env)
+def range(rng: "Range[timedelta]") -> str:
+    if rng.low == rng.high:
+        return str(rng.low)
+    return f"{rng.low}-{rng.high}"
+
+
+@register_filter(env)
+def td_range_minutes(rng: "Range[timedelta]") -> str:
+    if rng.low == rng.high:
+        return td_minutes(rng.low)
+    return f"{td_minutes(rng.low)}-{td_minutes(rng.high)}"
+
+
+@register_filter(env)
+def to_utc(dt: datetime) -> datetime:
+    return dt.astimezone(timezone.utc)
+
+
+TCtx = t.TypeVar("TCtx", bound="DataclassInstance")
+
+
+@dataclasses.dataclass(slots=True)
+class BaseCtx:
     resources: dict[str, str]
+    time_offset: t.Optional[timedelta]
+    last_sync: datetime
+
+    def get_time_offset_ms(self) -> t.Optional[int]:
+        if self.time_offset is None:
+            return None
+        return self.time_offset // timedelta(milliseconds=1)
 
 
-@dataclasses.dataclass
+class Template(t.Generic[TCtx]):
+    TEMPLATE_PATH: str
+
+    def __init__(self, base_ctx: BaseCtx, ctx: TCtx):
+        self.base_ctx = base_ctx
+        self.ctx = ctx
+
+    def get_output_path(self) -> str:
+        raise NotImplementedError
+
+
+class Renderer:
+    def __init__(self, destdir: str):
+        self.existing_paths = set[str]()
+        self.destdir = destdir
+
+    def _ensure_dir_exists(self, directory: str) -> None:
+        if directory in self.existing_paths:
+            return
+        os.makedirs(directory, exist_ok=True)
+        self.existing_paths.add(directory)
+
+    def render(self, tpl: "Template[DataclassInstance]") -> str:
+        path = tpl.get_output_path()
+
+        dest_path = os.path.join(self.destdir, path)
+        self._ensure_dir_exists(os.path.dirname(dest_path))
+
+        print("GEN ", path)
+        env.get_template(tpl.TEMPLATE_PATH).stream(
+            base_ctx=tpl.base_ctx,
+            ctx=tpl.ctx,
+        ).dump(dest_path)
+        return path
+
+
+@dataclasses.dataclass(slots=True)
 class GenConfig:
     db: Database
     src: str
-    dst: str
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(slots=True, frozen=True)
 class RouteDisc:
     train_type: str
-    point_ids: tuple[int, ...]
-    route_part: Optional[int]
-    other: Hashable  # opaque identifier data
+    point_ids: tuple[str, ...]
+    route_part: t.Optional[int]
+    other: t.Hashable  # opaque identifier data
 
     @classmethod
-    def from_route(cls, route: Route) -> "RouteDisc":
+    def from_route(cls, route: Route) -> t.Self:
         points = route.get_scenario_points()
         return cls(
             train_type=route.get_train_type(),
@@ -76,25 +156,31 @@ class RouteDisc:
         )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class Server:
     code: str
-    name: str
-    time_offset: int
+    time_offset: timedelta
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class TrainSet:
     main_unit: str
     vehicle_counts: Counter[str]
     length: int
     weight: int
-    first_seen: int
-    last_seen: int
+
+    # server time
+    first_seen: datetime
+    last_seen: datetime
 
 
-def get_trainsets(db: Database, code: str, since: int, only: set[str]):
-    ret = {}
+def get_trainsets(
+        db: Database,
+        code: str,
+        since: int,
+        only: set[str]
+) -> dict[str, list[TrainSet]]:
+    ret = dict[str, list[TrainSet]]()
     with db.transaction() as tx:
         ids_trains = tx.select(
             model=Train,
@@ -117,13 +203,39 @@ def get_trainsets(db: Database, code: str, since: int, only: set[str]):
             vehicle_counts=Counter(v.name for v in vehicles),
             length=round(sum(vehicle.length for vehicle in vehicles)),
             weight=round(sum(vehicle.weight for vehicle in vehicles)),
-            first_seen=format_ts_iso_minutes(train.first_seen_server),
-            last_seen=format_ts_iso_minutes(train.last_seen_server),
+            first_seen=datetime.utcfromtimestamp(train.first_seen_server),
+            last_seen=datetime.utcfromtimestamp(train.last_seen_server),
         ))
     return ret
 
 
-@dataclasses.dataclass
+TLess = t.TypeVar("TLess", bound=SupportsLt)
+
+
+class Range(t.Generic[TLess]):
+    SEP = "-"
+
+    def __init__(self, low: TLess, high: TLess):
+        self.low = low
+        self.high = high
+        self.fmt = str
+
+    def __str__(self) -> str:
+        raise ValueError()
+        if self.low == self.high:
+            return self.fmt(self.low)
+        return f"{self.fmt(self.low)}{self.SEP}{self.fmt(self.high)}"
+
+    @classmethod
+    def from_minmax(
+            cls,
+            iterable: t.Iterable[TLess],
+            fmt: t.Callable[[TLess], str] = str
+    ) -> t.Self:
+        return cls(*minmax(iterable))
+
+
+@dataclasses.dataclass(slots=True)
 class TrainSetStats:
     main_units: list[str]
     length: Range[int]
@@ -133,11 +245,12 @@ class TrainSetStats:
 
 def get_trainset_stats(
         trainsets: dict[str, list[TrainSet]],
-        routes: Iterable[Route],
+        routes: t.Iterable[Route],
 ) -> TrainSetStats:
     accurate = True
     main_units = set()
-    lengths = weights = ()
+    lengths: tuple[int, ...] = ()
+    weights: tuple[int, ...] = ()
 
     for route in routes:
         route_trainsets = trainsets.get(route.train_no, [])
@@ -159,316 +272,407 @@ def get_trainset_stats(
 
     return TrainSetStats(
         main_units=sorted(main_units),
-        length=Range(*lengths),
-        weight=Range(*weights),
+        length=Range(lengths[0], lengths[1]),
+        weight=Range(weights[0], weights[1]),
         accurate=accurate,
     )
 
 
-def gen(
-        template: str,
-        destdir: str,
-        name: str,
-        root_ctx: RootCtx,
-        ctx: dict[str, Any],
-):
-    path = os.path.join(destdir, name)
-    print("GEN ", path)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    env.get_template(template).stream(ctx, g=root_ctx).dump(path)
+def format_route_no(no: str, part: t.Optional[int]) -> str:
+    if part is None:
+        return no
+    return f"{no}-{part}"
 
 
-def gen_tt_by_start(
+@dataclasses.dataclass(slots=True)
+class IndexCtx:
+    servers: list[Server]
+
+
+@dataclasses.dataclass(slots=True)
+class TrainStart:
+    no: str
+    type: str
+    name: str
+    start_time: time
+    duration: timedelta
+    main_units: list[str]
+    max_speed: int
+    length: Range[int]
+    weight: Range[int]
+    start_point: str
+    end_point: str
+    compositions: set[tuple[tuple[str, int], ...]]
+    inaccurate: bool
+
+
+@dataclasses.dataclass(slots=True)
+class StartCtx:
+    server: Server
+    trains: list[TrainStart]
+
+
+@dataclasses.dataclass(slots=True)
+class RouteVariant:
+    start_time: time
+    no: str
+
+
+@dataclasses.dataclass(slots=True)
+class TrainRoute:
+    prefixes: list[str]
+    part: t.Optional[int]
+    type: str
+    start: str
+    end: str
+    duration: Range[timedelta]
+    main_units: list[str]
+    max_speed: Range[int]
+    length: Range[int]
+    weight: Range[int]
+    variants: list[RouteVariant]
+    inaccurate: bool
+
+
+@dataclasses.dataclass(slots=True)
+class RouteCtx:
+    server: Server
+    routes: list[TrainRoute]
+
+    def has_parts(self) -> bool:
+        return any(route.part is not None for route in self.routes)
+
+
+@dataclasses.dataclass(slots=True)
+class TrainPoint:
+    point_id: str
+    name: str
+    prefix: t.Optional[str]
+    entry_time: t.Optional[time]
+    exit_time: time
+    line: int
+    stop_type: StopType
+    platform: t.Optional[str]
+    track: t.Optional[int]
+    is_active: bool
+    speed_limit: int
+
+
+@dataclasses.dataclass(slots=True)
+class TrainCtx:
+    server: Server
+    no: str
+    part: t.Optional[int]
+    name: str
+    type: str
+    main_units: list[str]
+    length: Range[int]
+    weight: Range[int]
+    prev: str
+    next: str
+    inaccurate: bool
+    trainsets: list[TrainSet]
+    path: list[TrainPoint]
+
+
+@dataclasses.dataclass(slots=True)
+class EmptyCtx:
+    pass
+
+
+class IndexTemplate(Template[IndexCtx]):
+    TEMPLATE_PATH = "index.html"
+
+    def get_output_path(self) -> str:
+        return "index.html"
+
+
+class AboutTemplate(Template[EmptyCtx]):
+    TEMPLATE_PATH = "about.html"
+
+    def get_output_path(self) -> str:
+        return "about.html"
+
+
+class StartTemplate(Template[StartCtx]):
+    TEMPLATE_PATH = "start.html"
+
+    def get_output_path(self) -> str:
+        return f"{self.ctx.server.code}/tt-by-start.html"
+
+
+class RouteTemplate(Template[RouteCtx]):
+    TEMPLATE_PATH = "route.html"
+
+    def get_output_path(self) -> str:
+        return f"{self.ctx.server.code}/tt-by-route.html"
+
+
+class TrainTemplate(Template[TrainCtx]):
+    TEMPLATE_PATH = "train.html"
+
+    def get_output_path(self) -> str:
+        no = format_route_no(self.ctx.no, self.ctx.part)
+        return f"{self.ctx.server.code}/train/{no}.html"
+
+
+def make_start_ctx(
         server: Server,
-        destdir: str,
-        name: str,
         points: dict[str, PointDetails],
         routes: list[Route],
         trainsets: dict[str, list[TrainSet]],
-        root_ctx: RootCtx,
-):
-    data = []
+) -> StartCtx:
+    trains: list[TrainStart] = []
     for route in sorted(routes, key=Route.get_start_time):
         trainset_stats = get_trainset_stats(trainsets, [route])
-        data.append({
-            "no": format_route_no(route),
-            "train_type": route.get_train_type(),
-            "train_name": route.train_name,
-            "start_time": route.get_start_time().strftime("%H:%M"),
-            "duration": format_timedelta(
+        trains.append(TrainStart(
+            no=format_route_no(route.train_no, route.route_part),
+            type=route.get_train_type(),
+            name=route.train_name,
+            start_time=route.get_start_time(),
+            duration=(
                 route.end().get_exit_datetime()
                 - route.start().get_entry_datetime()
             ),
-            "main_units": trainset_stats.main_units,
-            "max_speed": max(
+            main_units=trainset_stats.main_units,
+            max_speed=max(
                 (point.max_speed for point in route.get_scenario_points()),
-                default=0
+                default=0,
             ),
-            "train_length": trainset_stats.length,
-            "train_weight": trainset_stats.weight,
-            "start_point": points[route.start().point_id].get_human_name(),
-            "end_point": points[route.end().point_id].get_human_name(),
-            "inaccurate": not trainset_stats.accurate,
-            "compositions": {
+            length=trainset_stats.length,
+            weight=trainset_stats.weight,
+            start_point=points[route.start().point_id].get_human_name(),
+            end_point=points[route.end().point_id].get_human_name(),
+            compositions={
                 tuple(ts.vehicle_counts.items())
                 for ts
                 in trainsets.get(route.train_no, [])
             },
-        })
-
-    gen("start.html", destdir, name, root_ctx, {
-        "data": data,
-        "server": server,
-    })
+            inaccurate=not trainset_stats.accurate,
+        ))
+    return StartCtx(server, trains)
 
 
-def gen_tt_by_route(
+def prefix_sort_key(disc_prefixes: tuple[RouteDisc, list[str]]) -> SupportsLt:
+    _, prefixes = disc_prefixes
+    return len(prefixes[0]), prefixes
+
+
+def make_route_ctx(
         server: Server,
-        destdir: str,
-        name: str,
         points: dict[str, PointDetails],
         routes: list[Route],
         trainsets: dict[str, list[TrainSet]],
-        root_ctx: RootCtx,
-) -> dict[str, tuple[str, str]]:
+) -> RouteCtx:
     all_numbers = {r.train_no for r in routes}
 
-    groups = {}
+    groups = dict[RouteDisc, list[Route]]()
     for route in routes:
         disc = RouteDisc.from_route(route)
         groups.setdefault(disc, []).append(route)
 
-    prefixes = {}
+    group_prefixes = dict[RouteDisc, list[str]]()
     for disc, routes in groups.items():
         numbers = {r.train_no for r in routes}
-        prefixes[disc] = tuple(sorted(
+        group_prefixes[disc] = sorted(
             get_prefixes(numbers, all_numbers - numbers)
-        ))
+        )
 
-    data = []
-    for disc, prefixes in sorted(prefixes.items(), key=lambda pair: (
-            len(pair[1][0]),
-            pair[1]
-    )):
+    routes_ctx = list[TrainRoute]()
+    for disc, prefixes in sorted(group_prefixes.items(), key=prefix_sort_key):
         group = groups[disc]
         trainset_stats = get_trainset_stats(trainsets, group)
-        data.append({
-            "prefixes": prefixes,
-            "part": str(disc.route_part or ""),
-            "train_type": disc.train_type,
-            "start": points[disc.point_ids[0]].get_human_name(),
-            "end": points[disc.point_ids[-1]].get_human_name(),
-            "duration": Range.from_minmax(iterable=(
+        routes_ctx.append(TrainRoute(
+            prefixes=prefixes,
+            part=disc.route_part,
+            type=disc.train_type,
+            start=points[disc.point_ids[0]].get_human_name(),
+            end=points[disc.point_ids[-1]].get_human_name(),
+            duration=Range.from_minmax(
                 r.end().get_exit_datetime() - r.start().get_entry_datetime()
                 for r
                 in group
-            ), fmt=format_timedelta),
-            "main_units": trainset_stats.main_units,
-            "max_speed": Range.from_minmax(
+            ),
+            main_units=trainset_stats.main_units,
+            max_speed=Range.from_minmax(
                 max(p.max_speed for p in r.get_scenario_points())
                 for r
                 in group
             ),
-            "train_length": trainset_stats.length,
-            "train_weight": trainset_stats.weight,
-            "inaccurate": not trainset_stats.accurate,
-            "routes": [{
-                "start_time": route.get_start_time(),
-                "number": format_route_no(route),
-            } for route in sorted(group, key=Route.get_start_time)]
-        })
-
-    gen("route.html", destdir, name, root_ctx, {
-        "has_parts": any(disc.route_part for disc in groups),
-        "data": data,
-        "server": server,
-    })
-
-    return {
-        route["number"]: (
-            routes[(idx - 1) % len(routes)]["number"],
-            routes[(idx + 1) % len(routes)]["number"],
-        )
-        for routes in (row["routes"] for row in data)
-        for idx, route in enumerate(routes)
-    }
+            length=trainset_stats.length,
+            weight=trainset_stats.weight,
+            variants=[RouteVariant(
+                start_time=route.get_start_time(),
+                no=format_route_no(route.train_no, route.route_part),
+            ) for route in sorted(group, key=Route.get_start_time)],
+            inaccurate=not trainset_stats.accurate,
+        ))
+    return RouteCtx(server, routes_ctx)
 
 
-def gen_train(
+def make_train_ctx(
         server: Server,
-        destdir: str,
-        name: str,
         points: dict[str, PointDetails],
         route: Route,
-        adj: tuple[str, str],
+        prev: str,
+        next_: str,
         trainsets: dict[str, list[TrainSet]],
-        root_ctx: RootCtx,
-):
+) -> TrainCtx:
     trainset_stats = get_trainset_stats(trainsets, [route])
-
-    prev_no, next_no = adj
-    params = {
-        "train_number": route.train_no,
-        "route_part": route.route_part or "",
-        "train_name": route.train_name,
-        "train_type": route.get_train_type(),
-        "main_units": trainset_stats.main_units,
-        "length": trainset_stats.length,
-        "weight": trainset_stats.weight,
-        "inaccurate": not trainset_stats.accurate,
-        "prev": prev_no,
-        "next": next_no,
-    }
-    path = [{
-        "point_id": point.point_id,
-        "name": points[point.point_id].name,
-        "prefix": points[point.point_id].prefix,
-        "entry_time": (
-            point.get_entry_time().strftime("%H:%M")
+    path = [TrainPoint(
+        point_id=point.point_id,
+        name=points[point.point_id].name,
+        prefix=points[point.point_id].prefix,
+        entry_time=(
+            point.get_entry_time()
             if point.get_entry_time() != point.get_exit_time()
-            else "--:--"
+            else None
         ),
-        "exit_time": point.get_exit_time().strftime("%H:%M"),
-        "line": point.line,
-        "stop_type": format_stop_type(point.stop_type),
-        "platform": point.platform or "",
-        "track": point.track or "",
-        "is_active": point.status == RoutePointStatus.PLAYABLE,
-        "speed_limit": point.max_speed,
-    } for point in route.route_points]
+        exit_time=point.get_exit_time(),
+        line=point.line,
+        stop_type=point.stop_type,
+        platform=point.platform,
+        track=point.track,
+        is_active=point.status == RoutePointStatus.PLAYABLE,
+        speed_limit=point.max_speed,
+    ) for point in route.route_points]
 
-    gen("train.html", destdir, name, root_ctx, {
-        "path": path,
-        "params": params,
-        "trainsets": trainsets.get(route.train_no, []),
-        "server": server,
-    })
-
-
-def make_server(
-        destdir: str,
-        server: Server,
-        routes: RawRoutes,
-        trainsets: dict[str, list[TrainSet]],
-        root_ctx: RootCtx,
-) -> set[str]:
-    files = set()
-    points = get_points(routes)
-    routes = get_routes(routes, points)
-
-    name = f"{server.code}/tt-by-start.html"
-    gen_tt_by_start(server, destdir, name, points, routes, trainsets, root_ctx)
-    files.add(name)
-
-    name = f"{server.code}/tt-by-route.html"
-    adj = gen_tt_by_route(
-        server,
-        destdir,
-        name,
-        points,
-        routes,
-        trainsets,
-        root_ctx
+    return TrainCtx(
+        server=server,
+        no=route.train_no,
+        part=route.route_part,
+        name=route.train_name,
+        type=route.get_train_type(),
+        main_units=trainset_stats.main_units,
+        length=trainset_stats.length,
+        weight=trainset_stats.weight,
+        inaccurate=not trainset_stats.accurate,
+        prev=prev,
+        next=next_,
+        trainsets=trainsets.get(route.train_no, []),
+        path=path,
     )
-    files.add(name)
 
+
+def iter_train_templates(
+        server: Server,
+        points: dict[str, PointDetails],
+        routes: list[Route],
+        adj: dict[str, tuple[str, str]],
+        trainsets: dict[str, list[TrainSet]],
+        base_ctx: BaseCtx,
+) -> t.Iterable[TrainTemplate]:
     for route in routes:
-        name = f"{server.code}/train/{format_route_no(route)}.html"
-        gen_train(
-            server,
-            destdir,
-            name,
-            points,
-            route,
-            adj[format_route_no(route)],
-            trainsets,
-            root_ctx,
+        prev, next_ = adj[format_route_no(route.train_no, route.route_part)]
+        yield TrainTemplate(base_ctx, make_train_ctx(
+            server, points, route, prev, next_, trainsets
+        ))
+
+
+def iter_server_templates(
+        cfg: GenConfig,
+        server: Server,
+        resources: dict[str, str],
+        last_sync: datetime,
+        since: int,
+) -> t.Iterable[Template[t.Any]]:
+    base_ctx = BaseCtx(resources, server.time_offset, last_sync)
+    tt_path = os.path.join(cfg.src, "servers", f"{server.code}.json")
+    tt = load_file(tt_path, RawRoutes)
+    train_numbers = {route.trainNoLocal for route in tt.root}
+
+    trainsets = get_trainsets(cfg.db, server.code, since, train_numbers)
+    points = get_points(tt)
+    routes = get_routes(tt, points)
+
+    route_ctx = make_route_ctx(server, points, routes, trainsets)
+    adj = {
+        variant.no: (
+            route.variants[(idx - 1) % len(route.variants)].no,
+            route.variants[(idx + 1) % len(route.variants)].no,
         )
-        files.add(name)
+        for route in route_ctx.routes
+        for idx, variant in enumerate(route.variants)
+    }
 
-    return files
+    yield StartTemplate(base_ctx, make_start_ctx(
+        server, points, routes, trainsets,
+    ))
+    yield RouteTemplate(base_ctx, route_ctx)
+    yield from iter_train_templates(
+        server, points, routes, adj, trainsets, base_ctx
+    )
 
 
-def copy_resources(destdir: str, resources: dict[str, str]):
+def iter_templates(
+        cfg: GenConfig,
+        servers: list[Server],
+        resources: dict[str, str],
+        last_sync: datetime
+) -> t.Iterable[Template[t.Any]]:
+    week_ago = time_secs() - (7 * 24 * 3600)
+    base_ctx = BaseCtx(resources, None, last_sync)
+
+    yield IndexTemplate(base_ctx, IndexCtx(servers))
+    yield AboutTemplate(base_ctx, EmptyCtx())
+    for server in servers:
+        yield from iter_server_templates(
+            cfg, server, resources, last_sync, week_ago
+        )
+
+
+def copy_resources(destdir: str, resources: dict[str, str]) -> t.Iterable[str]:
     for src_name, dst_name in resources.items():
         src = get_resource_path(src_name)
         dst = os.path.join(destdir, dst_name)
-        print("COPY", dst)
+        print("COPY", dst_name)
         shutil.copy(src, dst)
+    return resources.values()
 
 
-def make_site(
-        cfg: GenConfig,
-        root_ctx: RootCtx,
-        servers: list[Server],
-) -> set[str]:
-    files = set()
-
-    copy_resources(cfg.dst, root_ctx.resources)
-    files.update(root_ctx.resources.values())
-
-    gen("index.html", cfg.dst, "index.html", root_ctx, {
-        "servers": servers,
-        "server": None,
-    })
-    files.add("index.html")
-
-    gen("about.html", cfg.dst, "about.html", root_ctx, {"server": None})
-    files.add("about.html")
-
-    week_ago = time_secs() - (7 * 24 * 3600)
-    for server in servers:
-        path = os.path.join(cfg.src, "servers", f"{server.code}.json")
-        tt = load_file(path, RawRoutes)
-        train_numbers = {route.trainNoLocal for route in tt.root}
-        trainsets = get_trainsets(cfg.db, server.code, week_ago, train_numbers)
-        server_files = make_server(cfg.dst, server, tt, trainsets, root_ctx)
-        files.update(server_files)
-
-    return files
-
-
-def cleanup_files(directory: str, keep: set[str]):
+def walk_files(directory: str) -> t.Iterable[str]:
     for root, _, files in os.walk(directory):
         for file in files:
-            name = os.path.relpath(os.path.join(root, file), directory)
-            if name in keep:
-                continue
-            path = os.path.join(directory, name)
-            print("DEL ", path)
-            os.unlink(path)
+            yield os.path.relpath(os.path.join(root, file), directory)
 
 
-def make(db: Database, src: str, dst: str, only_code: Optional[str]):
-    cfg = GenConfig(db, src, dst)
+def cleanup_files(directory: str, keep: set[str]) -> None:
+    for file in walk_files(directory):
+        if file in keep:
+            continue
+        print("DEL ", file)
+        os.unlink(os.path.join(directory, file))
+
+
+def load_server_time_offset(src: str, code: str) -> timedelta:
+    millis = load_file(os.path.join(src, "time_offsets", f"{code}.json"), int)
+    return timedelta(milliseconds=millis)
+
+
+def make(db: Database, src: str, dst: str, only_code: t.Optional[str]) -> None:
+    cfg = GenConfig(db, src)
 
     sync_ts = load_file(os.path.join(cfg.src, "meta.json"), Meta).sync_ts
-    resources = get_resources(RESOURCES_VERSIONED)
+    last_sync = datetime.fromtimestamp(sync_ts)
+    resources = get_resources()
 
-    root_ctx = RootCtx(
-        sync_ts=format_ts_rfc_7231(sync_ts),
-        resources=resources,
-    )
-
-    servers = load_file(os.path.join(cfg.src, "servers.json"), RawServers)
+    raw_servers = load_file(os.path.join(cfg.src, "servers.json"), RawServers)
 
     servers = [
-        Server(
-            code=server.ServerCode,
-            name=server.ServerName,
-            time_offset=load_file(os.path.join(
-                cfg.src,
-                "time_offsets",
-                f"{server.ServerCode}.json"
-            ), int)
+        Server(code, load_server_time_offset(src, code))
+        for code
+        in pick_codes(
+            only_code,
+            (server.ServerCode for server in raw_servers.root)
         )
-        for server
-        in servers.root
-        if only_code is None or server.ServerCode == only_code
     ]
-    if not servers:
-        raise ValueError("No servers")
 
-    files = make_site(cfg, root_ctx, servers)
+    renderer = Renderer(dst)
+    files = {
+        renderer.render(template)
+        for template
+        in iter_templates(cfg, servers, resources, last_sync)
+    }
+    files.update(copy_resources(dst, resources))
 
-    cleanup_files(cfg.dst, keep=files)
+    cleanup_files(dst, files)

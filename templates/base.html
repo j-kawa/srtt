@@ -1,42 +1,52 @@
-{% macro inacc(inacc, value, unit=None) -%}
+# macro inacc(inacc, value, unit=None)
 <span{% if inacc %} class="inaccurate"{% endif %}>{{
   value
 }}{% if unit %}&nbsp;{{ unit }}{% endif %}</span>
-{%- endmacro -%}
+#- endmacro
 
-{% macro composition(vehicles) -%}
-{% for name, count in vehicles -%}
+# macro composition(vehicles)
+# for name, count in vehicles
 {{ count }}&middot;{{ name }}{% if not loop.last %} {% endif %}
-{%- endfor %}
-{%- endmacro -%}
+#- endfor
+# endmacro
 
-{%- macro bigint(integer) %}{{ integer }}n{% endmacro -%}
+# macro bigint(integer)
+{{ integer }}n
+#- endmacro
 
+# macro opt(val)
+# if val is not none
+{{ val }}
+#- endif
+# endmacro
+
+# set time_offset = base_ctx.get_time_offset_ms()
 
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <title>SRTT {% block title required %}{% endblock %}</title>
-    <script defer>const time_offset = {{
-      "undefined" if server is none else bigint(server.time_offset)
+    <script defer>const timeOffset = {{
+      "undefined" if time_offset is none else bigint(time_offset)
     }};</script>
-    <script defer src="/{{ g.resources['script.js'] }}"></script>
-    <link rel="stylesheet" href="/{{ g.resources['style.css'] }}">
+    <script defer src="/{{ base_ctx.resources['script.js'] }}"></script>
+    <link rel="stylesheet" href="/{{ base_ctx.resources['style.css'] }}">
   </head>
   <body>
     <div class="header container">
-      <div class="left"><a href="/">SRTT</a> {% block description required %}
-      {% endblock %}</div>
+      <div class="left"><a href="/">SRTT</a> {% block description required %}{% endblock %}</div>
       <div class="center"><span id="clock">--:--:--</span></div>
-      <div class="right">Last sync:
-        <span id="last_sync" onmouseenter="update_last_sync(this)">{{
-          g.sync_ts
-        }}</span>
+      <div class="right">
+	Last sync:
+	<span id="last-sync" onmouseenter="updateLastSync(this)">{{
+	  (base_ctx.last_sync|to_utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+	}}</span>
       </div>
     </div>
     <div class="content">
-     {%- block body required %}{% endblock -%}
+# block body required
+# endblock
     </div>
   </body>
 </html>

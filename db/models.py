@@ -16,7 +16,7 @@ def deserialize_composition(composition: str) -> list[str]:
     return composition.split(COMPOSITION_SEP)
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class Train:
     server: str
     train_number: str

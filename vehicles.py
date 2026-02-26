@@ -4,7 +4,7 @@ import re
 from consts import VEHICLE_FAMILIES, VEHICLES
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class Vehicle:
     name: str
     weight: float

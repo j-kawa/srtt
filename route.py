@@ -1,5 +1,4 @@
 import dataclasses
-import re
 from datetime import datetime, time
 from enum import Enum
 from itertools import count, groupby
@@ -10,16 +9,13 @@ from point import PointDetails, StopType
 from utils import parse_ts
 
 
-NAME_REGEX = re.compile(r'(?P<kind>.+) - ".+"')
-
-
 class RoutePointStatus(Enum):
     PLAYABLE = 1
     OTHER_PLAYABLE = 2  # playable in different part
     UNPLAYABLE = 3
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class RoutePoint:
     point_id: str
     entry_time: Optional[datetime]
@@ -33,19 +29,25 @@ class RoutePoint:
     status: RoutePointStatus
 
     def get_entry_datetime(self) -> datetime:
-        return self.entry_time or self.exit_time
+        ret = self.entry_time or self.exit_time
+        if ret is None:
+            raise ValueError("no time specified")
+        return ret
 
     def get_exit_datetime(self) -> datetime:
-        return self.exit_time or self.entry_time
+        ret = self.exit_time or self.entry_time
+        if ret is None:
+            raise ValueError("no time specified")
+        return ret
 
     def get_entry_time(self) -> time:
-        return (self.entry_time or self.exit_time).time()
+        return self.get_entry_datetime().time()
 
     def get_exit_time(self) -> time:
-        return (self.exit_time or self.entry_time).time()
+        return self.get_exit_datetime().time()
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class Route:
 
     # logical parameters

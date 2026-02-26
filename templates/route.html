@@ -1,17 +1,18 @@
-{% extends "base.html" %}
+# extends "base.html"
 
-{% block title %}{{ server.code }} routes{% endblock %}
+{% block title %}{{ ctx.server.code }} routes{% endblock %}
 
-{% block description %}{{ server.code }} trains grouped by the route{% endblock %}
+{% block description %}{{ ctx.server.code }} trains grouped by the route{% endblock %}
 
-{% block body %}
+# block body
+# set has_parts = ctx.has_parts()
 <table>
   <tr>
     <th class="inactive">ord</th>
     <th>no.</th>
-    {% if has_parts %}
+# if has_parts
     <th>route part</th>
-    {% endif -%}
+# endif
     <th>train type</th>
     <th>scenario start</th>
     <th>scenario end</th>
@@ -22,29 +23,29 @@
     <th>train weight</th>
     <th>start times</th>
   </tr>
-  {%- for row in data -%}
+# for route in ctx.routes
   <tr class="sel">
     <td class="tnum inactive">{{ loop.index }}</td>
-    <td>{{ row["prefixes"]|join("<br>"|safe) }}</td>
-    {% if has_parts %}
-    <td>{{ row["part"] }}</td>
-    {% endif -%}
-    <td>{{ row["train_type"] }}</td>
-    <td>{{ row["start"] }}</td>
-    <td>{{ row["end"] }}</td>
-    <td class="tnum">{{ row["duration"] }}</td>
-    <td>{{ inacc(row["inaccurate"], row["main_units"]|join(", ")) }}</td>
-    <td class="tnum">{{ row["max_speed"] }}&nbsp;km/h</td>
-    <td class="tnum">{{ inacc(row["inaccurate"], row["train_length"], "m") }}</td>
-    <td class="tnum">{{ inacc(row["inaccurate"], row["train_weight"], "t") }}</td>
+    <td>{{ route.prefixes|join("<br>"|safe) }}</td>
+# if has_parts
+    <td>{{ opt(route.part) }}</td>
+# endif
+    <td>{{ route.type }}</td>
+    <td>{{ route.start }}</td>
+    <td>{{ route.end }}</td>
+    <td class="tnum">{{ route.duration|td_range_minutes }}</td>
+    <td>{{ inacc(route.inaccurate, route.main_units|join(", ")) }}</td>
+    <td class="tnum">{{ route.max_speed|range }}&nbsp;km/h</td>
+    <td class="tnum">{{ inacc(route.inaccurate, route.length|range, "m") }}</td>
+    <td class="tnum">{{ inacc(route.inaccurate, route.weight|range, "t") }}</td>
     <td>
-      {% for route in row["routes"] -%}
-      <a href="train/{{ route['number'] }}.html">{{
-        route["start_time"].strftime("%H:%M")
+# for variant in route.variants
+      <a href="train/{{ variant.no }}.html">{{
+        variant.start_time.strftime("%H:%M")
       }}</a>
-      {% endfor -%}
+# endfor
     </td>
   </tr>
-  {% endfor -%}
+# endfor
 </table>
-{% endblock %}
+# endblock

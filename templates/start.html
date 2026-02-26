@@ -1,50 +1,48 @@
-{% extends "base.html" %}
+# extends "base.html"
 
-{% block title %}{{ server.code }} start times{% endblock %}
+{% block title %}{{ ctx.server.code }} start times{% endblock %}
 
-{% block description %}{{ server.code }} trains sorted by the start time{% endblock %}
+{% block description %}{{ ctx.server.code }} trains sorted by the start time{% endblock %}
 
-{% block body %}
+# block body
 <table>
   <tr>
     <th class="inactive">ord</th>
-    <th>start time</th>
+    <th>start</th>
     <th>no.</th>
-    <th>train type</th>
-    <th>train name</th>
+    <th>type</th>
+    <th>name</th>
     <th>scenario start</th>
     <th>scenario end</th>
     <th>duration</th>
     <th>main unit</th>
     <th>max speed</th>
-    <th>train length</th>
-    <th>train weight</th>
+    <th>length</th>
+    <th>weight</th>
     <th>composition</th>
   </tr>
-  {% for row in data -%}
+# for train in ctx.trains
   <tr class="sel">
     <td class="tnum inactive">{{ loop.index }}</td>
-    <td class="tnum">{{ row["start_time"] }}</td>
-    <td><a href="train/{{ row['no'] }}.html">{{ row["no"] }}</a></td>
-    <td>{{ row["train_type"] }}</td>
-    <td>{{ row["train_name"] }}</td>
-    <td>{{ row["start_point"] }}</td>
-    <td>{{ row["end_point"] }}</td>
-    <td class="tnum">{{ row["duration"] }}</td>
-    <td>{{ inacc(row["inaccurate"], row["main_units"]|join(", ")) }}</td>
-    <td class="tnum">{{ row["max_speed"] }}&nbsp;km/h</td>
-    <td class="tnum">{{ inacc(row["inaccurate"], row["train_length"], "m") }}</td>
-    <td class="tnum">{{ inacc(row["inaccurate"], row["train_weight"], "t") }}</td>
-    <td>
-      {%- if row["compositions"] | length > 1 -%}
-      <em>variable</em>
-      {%- elif row["compositions"] | length == 0 -%}
-      <em>unknown</em>
-      {%- else -%}
-      {{ composition(*row["compositions"]) }}
-      {%- endif -%}
-    </td>
+    <td class="tnum">{{ train.start_time.strftime("%H:%M") }}</td>
+    <td><a href="train/{{ train.no }}.html">{{ train.no }}</a></td>
+    <td>{{ train.type }}</td>
+    <td>{{ train.name }}</td>
+    <td>{{ train.start_point }}</td>
+    <td>{{ train.end_point }}</td>
+    <td class="tnum">{{ train.duration|td_minutes }}</td>
+    <td>{{ inacc(train.inaccurate, train.main_units|join(", ")) }}</td>
+    <td class="tnum">{{ train.max_speed }}&nbsp;km/h</td>
+    <td class="tnum">{{ inacc(train.inaccurate, train.length|range, "m") }}</td>
+    <td class="tnum">{{ inacc(train.inaccurate, train.weight|range, "t") }}</td>
+# if train.compositions|length > 1
+    <td><em>variable</em></td>
+# elif not train.compositions
+    <td><em>unknown</em></td>
+# else
+    <td>{{ composition(*train.compositions) }}</td>
+# endif
   </tr>
-  {% endfor -%}
+# endfor
 </table>
-{% endblock %}
+# endblock

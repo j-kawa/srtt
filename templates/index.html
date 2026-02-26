@@ -1,21 +1,21 @@
-{% extends "base.html" %}
+# extends "base.html"
 
 {% block title %}main page{% endblock %}
 
 {% block description %}main page{% endblock %}
 
-{% block body %}
+# block body
 <h1>Welcome to SRTT (SimRail timetables).</h1>
 Please, pick a timetable:
 <table>
-  {% for server in servers -%}
+# for server in ctx.servers
   <tr>
     <td><a href="{{ server.code }}/tt-by-route.html">{{ server.code }} &ndash; routes</a></td>
     <td><a href="{{ server.code }}/tt-by-start.html">{{ server.code }} &ndash; start times</a></td>
   </tr>
-  {% endfor -%}
+# endfor
 </table>
 <div>
   Alternatively, check out the <a href="/about.html">about</a> page.
 </div>
-{% endblock %}
+# endblock

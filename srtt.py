@@ -73,7 +73,7 @@ parser.add_argument(
 )
 
 
-def main():
+def main() -> None:
     args = parser.parse_args()
 
     with (

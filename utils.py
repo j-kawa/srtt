@@ -1,9 +1,17 @@
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Iterable, Optional, Protocol, Self
 
 
-def pick_codes(only_code: Optional[str], all_codes: list[str]) -> list[str]:
+class SupportsLt(Protocol):
+    def __lt__(self, other: Self) -> bool:
+        pass
+
+
+def pick_codes(
+        only_code: Optional[str],
+        all_codes: Iterable[str]
+) -> Iterable[str]:
     if not only_code:
         return all_codes
     if only_code not in all_codes:

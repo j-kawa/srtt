@@ -1,45 +1,53 @@
-{% extends "base.html" %}
+# extends "base.html"
 
-{% block title %}{{ server.code }} train {{ params["train_number"] }}{% endblock %}
+{% block title %}{{ ctx.server.code }} train {{ ctx.no }}{% endblock %}
 
-{% block description %}{{ server.code }} train {{ params["train_number"] }} details {% endblock %}
+{% block description %}{{ ctx.server.code }} train {{ ctx.no }} details {% endblock %}
 
-{% block body %}
+# macro time(t)
+# if t is none
+--:--
+#- else
+{{ t.strftime("%H:%M") }}
+#- endif
+# endmacro
+
+# block body
 <table>
   <tr>
     <th>no.</th>
-    <td>{{ params["train_number"] }}</td>
+    <td>{{ ctx.no }}</td>
   </tr>
-  {%- if params["route_part"] %}
+# if ctx.part is not none
   <tr>
     <th>route part</th>
-    <td>{{ params["route_part"] }}</td>
+    <td>{{ ctx.part }}</td>
   </tr>
-  {% endif -%}
+# endif
   <tr>
     <th>train type</th>
-    <td>{{ params["train_type"] }}</td>
+    <td>{{ ctx.type }}</td>
   </tr>
   <tr>
     <th>train name</th>
-    <td>{{ params["train_name"] }}</td>
+    <td>{{ ctx.name }}</td>
   </tr>
   <tr>
     <th>main unit</th>
-    <td>{{ inacc(params["inaccurate"], params["main_units"]|join(", ")) }}</td>
+    <td>{{ inacc(ctx.inaccurate, ctx.main_units|join(", ")) }}</td>
   </tr>
   <tr>
     <th>train length</th>
-    <td>{{ inacc(params["inaccurate"], params["length"], "m") }}</td>
+    <td>{{ inacc(ctx.inaccurate, ctx.length|range, "m") }}</td>
   </tr>
   <tr>
     <th>train weight</th>
-    <td>{{ inacc(params["inaccurate"], params["weight"], "t") }}</td>
+    <td>{{ inacc(ctx.inaccurate, ctx.weight|range, "t") }}</td>
   </tr>
 </table>
 <div>
-  <a href="{{ params['prev'] }}.html">&larr;{{ params['prev'] }}</a>
-  <a href="{{ params['next'] }}.html">{{ params['next'] }}&rarr;</a>
+  <a href="{{ ctx.prev }}.html">&larr;{{ ctx.prev }}</a>
+  <a href="{{ ctx.next }}.html">{{ ctx.next }}&rarr;</a>
 </div>
 <table>
   <tr>
@@ -50,22 +58,22 @@
     <th>weight</th>
     <th>composition</th>
   </tr>
-  {% if not trainsets -%}
+# if not ctx.trainsets
   <tr>
     <td colspan="6" class="inactive tcenter">no train history</td>
   </tr>
-  {% else -%}
-  {%- for trainset in trainsets -%}
+# else
+# for trainset in ctx.trainsets
   <tr class="sel">
     <td class="tnum inactive">{{ loop.index }}</td>
-    <td>{{ trainset["first_seen"] }}</td>
-    <td>{{ trainset["last_seen"] }}</td>
-    <td class="tnum">{{ trainset.length }} m</td>
-    <td class="tnum">{{ trainset.weight }} t</td>
+    <td>{{ trainset.first_seen.strftime("%Y-%m-%d %H:%M") }}</td>
+    <td>{{ trainset.last_seen.strftime("%Y-%m-%d %H:%M") }}</td>
+    <td class="tnum">{{ trainset.length }}&nbsp;m</td>
+    <td class="tnum">{{ trainset.weight }}&nbsp;t</td>
     <td>{{ composition(trainset.vehicle_counts.items()) }}</td>
   </tr>
-  {% endfor -%}
-  {% endif -%}
+# endfor
+# endif
 </table>
 <table>
   <tr>
@@ -79,22 +87,24 @@
     <th>PT</th>
     <th>EDR</th>
   </tr>
-  {% for row in path -%}
-  <tr class="{{ 'active' if row['is_active'] else 'inactive'}} sel">
+# for point in ctx.path
+  <tr class="{{ 'active' if point.is_active else 'inactive'}} sel">
     <td class="tnum inactive">{{ loop.index }}</td>
-    <td class="tnum">{{ row["speed_limit"]}}</td>
-    <td>{{ row["name"] }}</td>
-    <td>{{ row["entry_time"] }}</td>
-    <td>{{ row["exit_time"] }}</td>
-    <td>{{ row["line"] }}</td>
-    <td>{{ row["stop_type"] }}</td>
-    <td>{{ row["platform"] }} {{ row["track"]}}</td>
-    <td>{% if row["prefix"] %}
-      <a href="https://panel.simrail.eu:8093/?stationId={{ row['point_id'] }}&serverCode={{ server.code }}">{{
-        row["prefix"]
-      }}</a>
-    {% endif %}</td>
+    <td class="tnum">{{ point.speed_limit }}</td>
+    <td>{{ point.name }}</td>
+    <td>{{ time(point.entry_time) }}</td>
+    <td>{{ time(point.exit_time) }}</td>
+    <td>{{ point.line }}</td>
+    <td>{{ opt(point.stop_type.display()) }}</td>
+    <td>{{ (opt(point.platform) ~ " " ~ opt(point.track))|trim }}</td>
+# if point.prefix
+    <td><a href="https://panel.simrail.eu:8093/?stationId={{ point.point_id }}&serverCode={{ ctx.server.code }}">{{
+	point.prefix
+    }}</a></td>
+# else
+    <td></td>
+# endif
   </tr>
-  {% endfor -%}
+# endfor
 </table>
-{% endblock %}
+# endblock
