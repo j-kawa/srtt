@@ -1,4 +1,7 @@
 import unittest
+from itertools import chain
+
+from more_itertools import duplicates_everseen
 
 import consts
 import db
@@ -8,9 +11,19 @@ import db.models
 class TestConsts(unittest.TestCase):
     """consts.py consistency tests"""
 
+    def test_points(self) -> None:
+        duplicates = set(duplicates_everseen(chain.from_iterable(
+            consts.DLC_POINTS.values()
+        )))
+        self.assertFalse(duplicates, "duplicate points")
+
     def test_controllable_points(self) -> None:
-        for point in consts.CONTROLLABLE_POINTS:
-            self.assertIn(point, consts.INGAME_POINTS)
+        shorts = set[str]()
+        for dlc, points in consts.DLC_CONTROLLABLE_POINTS.items():
+            for point, short in points.items():
+                self.assertIn(point, consts.DLC_POINTS[dlc])
+                self.assertNotIn(short, shorts, "duplicate short")
+                shorts.add(short)
 
     def test_main_units(self) -> None:
         names = {details["name"] for details in consts.VEHICLES.values()}
