@@ -9,16 +9,15 @@ from itertools import chain
 import jinja2
 from more_itertools import minmax
 
-from consts import MAIN_UNITS
+from consts import CONTROLLABLE_POINTS, MAIN_UNITS
 from db import Database
 from db.expr import All, Asc, Desc, Eq, Field, Gte, Value
 from db.models import Train, deserialize_composition
 from external.client import load_file
 from external.models import Meta, RawRoutes, RawServers
-from point import PointDetails, StopType, get_points
 from prefix import get_prefixes
 from resources import get_resource_path, get_resources
-from route import Route, RoutePointStatus, get_routes
+from route import Route, RoutePointStatus, StopType, get_routes
 from utils import SupportsLt, pick_codes, time_secs
 from vehicles import parse_vehicle
 
@@ -133,7 +132,9 @@ class GenConfig:
 @dataclasses.dataclass(slots=True, frozen=True)
 class RouteDisc:
     train_type: str
-    point_ids: tuple[str, ...]
+    point_names: tuple[str, ...]
+    route_start: str
+    route_end: str
     route_part: t.Optional[int]
     other: t.Hashable  # opaque identifier data
 
@@ -142,7 +143,9 @@ class RouteDisc:
         points = route.get_scenario_points()
         return cls(
             train_type=route.get_train_type(),
-            point_ids=tuple(point.point_id for point in points),
+            point_names=tuple(point.name for point in points),
+            route_start=points[0].get_nice_name(),
+            route_end=points[-1].get_nice_name(),
             route_part=route.route_part,
             other=(
                 len(route.train_no),
@@ -418,7 +421,6 @@ class TrainTemplate(Template[TrainCtx]):
 
 def make_start_ctx(
         server: Server,
-        points: dict[str, PointDetails],
         routes: list[Route],
         trainsets: dict[str, list[TrainSet]],
 ) -> StartCtx:
@@ -441,8 +443,8 @@ def make_start_ctx(
             ),
             length=trainset_stats.length,
             weight=trainset_stats.weight,
-            start_point=points[route.start().point_id].get_human_name(),
-            end_point=points[route.end().point_id].get_human_name(),
+            start_point=route.start().get_nice_name(),
+            end_point=route.end().get_nice_name(),
             compositions={
                 tuple(ts.vehicle_counts.items())
                 for ts
@@ -460,7 +462,6 @@ def prefix_sort_key(disc_prefixes: tuple[RouteDisc, list[str]]) -> SupportsLt:
 
 def make_route_ctx(
         server: Server,
-        points: dict[str, PointDetails],
         routes: list[Route],
         trainsets: dict[str, list[TrainSet]],
 ) -> RouteCtx:
@@ -486,8 +487,8 @@ def make_route_ctx(
             prefixes=prefixes,
             part=disc.route_part,
             type=disc.train_type,
-            start=points[disc.point_ids[0]].get_human_name(),
-            end=points[disc.point_ids[-1]].get_human_name(),
+            start=disc.route_start,
+            end=disc.route_end,
             duration=Range.from_minmax(
                 r.end().get_exit_datetime() - r.start().get_entry_datetime()
                 for r
@@ -512,7 +513,6 @@ def make_route_ctx(
 
 def make_train_ctx(
         server: Server,
-        points: dict[str, PointDetails],
         route: Route,
         prev: str,
         next_: str,
@@ -521,8 +521,8 @@ def make_train_ctx(
     trainset_stats = get_trainset_stats(trainsets, [route])
     path = [TrainPoint(
         point_id=point.point_id,
-        name=points[point.point_id].name,
-        prefix=points[point.point_id].prefix,
+        name=point.name,
+        prefix=CONTROLLABLE_POINTS.get(point.name),
         entry_time=(
             point.get_entry_time()
             if point.get_entry_time() != point.get_exit_time()
@@ -556,7 +556,6 @@ def make_train_ctx(
 
 def iter_train_templates(
         server: Server,
-        points: dict[str, PointDetails],
         routes: list[Route],
         adj: dict[str, tuple[str, str]],
         trainsets: dict[str, list[TrainSet]],
@@ -565,7 +564,7 @@ def iter_train_templates(
     for route in routes:
         prev, next_ = adj[format_route_no(route.train_no, route.route_part)]
         yield TrainTemplate(base_ctx, make_train_ctx(
-            server, points, route, prev, next_, trainsets
+            server, route, prev, next_, trainsets
         ))
 
 
@@ -582,10 +581,9 @@ def iter_server_templates(
     train_numbers = {route.trainNoLocal for route in tt.root}
 
     trainsets = get_trainsets(cfg.db, server.code, since, train_numbers)
-    points = get_points(tt)
-    routes = get_routes(tt, points)
+    routes = get_routes(tt)
 
-    route_ctx = make_route_ctx(server, points, routes, trainsets)
+    route_ctx = make_route_ctx(server, routes, trainsets)
     adj = {
         variant.no: (
             route.variants[(idx - 1) % len(route.variants)].no,
@@ -596,11 +594,11 @@ def iter_server_templates(
     }
 
     yield StartTemplate(base_ctx, make_start_ctx(
-        server, points, routes, trainsets,
+        server, routes, trainsets,
     ))
     yield RouteTemplate(base_ctx, route_ctx)
     yield from iter_train_templates(
-        server, points, routes, adj, trainsets, base_ctx
+        server, routes, adj, trainsets, base_ctx
     )
 
 
