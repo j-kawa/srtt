@@ -14,18 +14,19 @@ class Vehicle:
 
 IDENT_REGEX = re.compile(
     r"(?P<model>[-\w/ ]+)"
-    r"(:(?P<brake>[A-Z][A-Z\d]*?))?"
-    r"(:(?P<cargo_weight>\d*))?"
+    r"(:(?P<brake>[A-Z][A-Z\d]*))?"
+    r"(:(?P<cargo_weight>\d*(\.\d*)?))?"
     r"(@(?P<cargo>[-\w]*))?"
 )
 
 
-def parse_ident(ident: str) -> tuple[str, int]:
+def parse_ident(ident: str) -> tuple[str, float]:
     ident = ident.strip()
-    if match_ := IDENT_REGEX.fullmatch(ident):
-        groups = match_.groupdict()
-        return groups["model"], int(groups["cargo_weight"] or "0")
-    raise ValueError(f"unrecognized format: {repr(ident)}")
+    match_ = IDENT_REGEX.fullmatch(ident)
+    if match_ is None:
+        raise ValueError(f"unrecognized format: {repr(ident)}")
+    groups = match_.groupdict()
+    return groups["model"], float(groups["cargo_weight"] or "0")
 
 
 def parse_vehicle(ident: str) -> Vehicle:
