@@ -140,6 +140,7 @@ DLC_POINTS: dict[t.Optional[Dlc], list[str]] = {
         "Zawiercie",
         "Zawiercie Borowe Pole",
         "Zawiercie GT",
+        "Zawiercie R97",
     ],
 
     Dlc.lodz: [
