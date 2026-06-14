@@ -350,6 +350,7 @@ MAIN_UNITS = {
     "ET25 (Dragon2)": "Dragon2",
     "EU07 (4E)": "EU07",
     "CD163": "CD163",
+    "Ty2 (Br52)": "Ty2",
     "?": "?",
 }
 
