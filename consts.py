@@ -4,8 +4,9 @@ from itertools import chain
 
 
 class Dlc(enum.StrEnum):
-    lodz = "lodz"
-    lodz2 = "lodz2"
+    LODZ_W = "lodz-warsaw"
+    LODZ_J = "lodz-junction"
+    LODZ_N = "lodz-north"
 
 
 DLC_POINTS: dict[t.Optional[Dlc], list[str]] = {
@@ -143,7 +144,7 @@ DLC_POINTS: dict[t.Optional[Dlc], list[str]] = {
         "Zawiercie R97",
     ],
 
-    Dlc.lodz: [
+    Dlc.LODZ_W: [
         "Bedoń",
         "Dąbrowice Skierniewickie",
         "Długokąty",
@@ -192,7 +193,7 @@ DLC_POINTS: dict[t.Optional[Dlc], list[str]] = {
         "Żyrardów",
     ],
 
-    Dlc.lodz2: [
+    Dlc.LODZ_J: [
         "Baby",
         "Baby GT",
         "Borszewice",
@@ -256,6 +257,38 @@ DLC_POINTS: dict[t.Optional[Dlc], list[str]] = {
         "Zgierz",
         "Zgierz Rudunki",
     ],
+    Dlc.LODZ_N: [
+        "Bełchów",
+        "Bobrowniki",
+        "Bratoszewice",
+        "Chociszew",
+        "Domaniewice",
+        "Domaniewice Centrum",
+        "Gawrony",
+        "Głowno",
+        "Głowno Północne",
+        "Grotniki",
+        "Jedlicze koło Zgierza",
+        "Kamień Łowicki",
+        # "Kutno",  # fixme: no playable route to Łowicz Główny
+        "Łęczyca",
+        "Łowicz Główny",
+        "Łowicz Główny PZS R12",
+        "Łowicz Główny PZS R24-R31",
+        "Łowicz Przedmieście",
+        "Mokra",
+        "Ozorków",
+        "Ozorków Nowe Miasto",
+        "Sierakowice Skierniewickie",
+        "Sierpów",
+        "Stare Grudze",
+        "Stryków",
+        "Swędów",
+        "Witonia",
+        "Zgierz Jaracza",
+        "Zgierz Kontrewers",
+        "Zgierz Północ",
+    ],
 }
 
 DLC_CONTROLLABLE_POINTS: dict[t.Optional[Dlc], dict[str, str]] = {
@@ -307,7 +340,7 @@ DLC_CONTROLLABLE_POINTS: dict[t.Optional[Dlc], dict[str, str]] = {
         "Zastów": "Zs",
         "Zawiercie": "Zw",
     },
-    Dlc.lodz: {
+    Dlc.LODZ_W: {
         "Gałkówek": "G",
         "Koluszki": "Kl",
         "Łódź Andrzejów": "ŁAn",
@@ -316,12 +349,13 @@ DLC_CONTROLLABLE_POINTS: dict[t.Optional[Dlc], dict[str, str]] = {
         "Radziwiłłów Mazowiecki": "RM",
         "Rogów": "Rg",
         "Skierniewice": "Sk",
-        "Żakowice Południowe": "ZP",
+        "Żakowice Południowe": "ŻP",
         "Żyrardów": "Zr",
     },
-    Dlc.lodz2: {
+    Dlc.LODZ_J: {
         "Baby": "Ba",
         "Gajewniki": "Ga",
+        "Glinnik": "Gl",
         "Łask": "La",
         "Łódź Chojny": "LCH",
         "Łódź Lublinek": "Lb",
@@ -332,10 +366,19 @@ DLC_CONTROLLABLE_POINTS: dict[t.Optional[Dlc], dict[str, str]] = {
         "Zduńska Wola": "ZW",
         "Zgierz": "Zg",
     },
+    Dlc.LODZ_N: {
+        "Bełchów": "Be",
+        "Głowno": "Gn",
+        "Łowicz Główny": "LG",
+        "Łowicz Przedmieście": "LP",
+        "Witonia": "Wt",
+        "Zgierz Północ": "ZP",
+    },
 }
 
 MAIN_UNITS = {
     "E186 (Traxx)": "Traxx",
+    "EU43 (Traxx)": "Traxx",
     "E6ACTa (Dragon2)": "Dragon2",
     "E6ACTadb (Dragon2)": "Dragon2",
     "ED250 (Pendolino)": "ED250",
@@ -406,6 +449,7 @@ class VehicleDetails(t.TypedDict):
 
 
 VEHICLES: dict[str, VehicleDetails] = {
+    "4E/EU07-001": {"family": "4E", "name": "EU07"},
     "4E/EU07-005": {"family": "4E", "name": "EU07"},
     "4E/EU07-068": {"family": "4E", "name": "EU07"},
     "4E/EU07-070": {"family": "4E", "name": "EU07"},
@@ -420,8 +464,27 @@ VEHICLES: dict[str, VehicleDetails] = {
     "4E/EP08-001": {"family": "4E", "name": "EP08"},
     "4E/EP08-008": {"family": "4E", "name": "EP08"},
     "4E/EP08-013": {"family": "4E", "name": "EP08"},
+    "Traxx/E186-133": {"family": "E186", "name": "Traxx"},
     "Traxx/E186-134": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-136": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-138": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-139": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-241": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-242": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-250": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-245": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-246": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-248": {"family": "E186", "name": "Traxx"},
     "Traxx/E186-929": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-930": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-928": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-941": {"family": "E186", "name": "Traxx"},
+    "Traxx/E186-942": {"family": "E186", "name": "Traxx"},
+    "Traxx/EU43-001": {"family": "E186", "name": "Traxx"},
+    "Traxx/EU43-002": {"family": "E186", "name": "Traxx"},
+    "Traxx/EU43-003": {"family": "E186", "name": "Traxx"},
+    "Traxx/EU43-004": {"family": "E186", "name": "Traxx"},
+    "Traxx/EU43-005": {"family": "E186", "name": "Traxx"},
     "Dragon2/E6ACTa-014": {"family": "E6ACTa", "name": "Dragon2"},
     "Dragon2/E6ACTa-016": {"family": "E6ACTa", "name": "Dragon2"},
     "Dragon2/E6ACTadb-027": {"family": "E6ACTa", "name": "Dragon2"},
@@ -514,6 +577,7 @@ VEHICLES: dict[str, VehicleDetails] = {
     "629Z/230-01_31514508558-7": {"family": "230-01", "name": "230-01"},
     "629Z/629Z_31514960133-0": {"family": "629Z", "name": "629Z"},
     "629Z/434Z_31514553133-5": {"family": "434Z", "name": "434Z"},
+    "629Z/434Z_33514565217-8": {"family": "434Z", "name": "434Z"},
     "11xa/80s/110Ac_50 51 59-78 003-8 Variant": {"family": "110Ac", "name": "PASS"},
     "11xa/80s/110Ac_50 51 59-78 003-8 Variant 80s": {"family": "110Ac", "name": "PASS"},
     "11xa/80s/110Ac_51 51 59-70 048-0 Variant 80s": {"family": "110Ac", "name": "PASS"},
