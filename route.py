@@ -125,6 +125,17 @@ def is_point_ingame(point: RawRoutePoint) -> bool:
     return point.nameOfPoint in INGAME_POINTS
 
 
+def get_point_status(
+        route_part: t.Optional[int],
+        pattern_point: t.Optional[int],
+) -> RoutePointStatus:
+    if pattern_point is None:
+        return RoutePointStatus.UNPLAYABLE
+    if route_part in [None, pattern_point]:
+        return RoutePointStatus.PLAYABLE
+    return RoutePointStatus.OTHER_PLAYABLE
+
+
 def make_route_points(
         raw_points: list[RawRoutePoint],
         route_pattern: list[t.Optional[int]],
@@ -143,15 +154,9 @@ def make_route_points(
             track=raw_point.track,
             kind=raw_point.trainType,
             max_speed=raw_point.maxSpeed,
-            status=(
-                RoutePointStatus.UNPLAYABLE
-                if not is_point_ingame(raw_point)
-                else RoutePointStatus.PLAYABLE
-                if route_part in [part_idx, None]
-                else RoutePointStatus.OTHER_PLAYABLE
-            ),
+            status=get_point_status(route_part, pattern_point),
         )
-        for raw_point, part_idx
+        for raw_point, pattern_point,
         in zip(raw_points, route_pattern, strict=True)
     ]
 
